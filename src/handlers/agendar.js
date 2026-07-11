@@ -1,6 +1,6 @@
-// Crea una cita (versión simple: pide datos en un solo mensaje)
-// Formato esperado: "agendar [barbero] [servicio] [fecha YYYY-MM-DD] [hora HH:MM]"
+// Crea una cita validando disponibilidad del barbero
 const { supabase } = require('../db/client');
+const { estaDisponible } = require('../db/disponibilidad');
 
 module.exports = async function agendar({ texto, numero, sock }) {
   const partes = texto.split(' ');
@@ -24,6 +24,12 @@ module.exports = async function agendar({ texto, numero, sock }) {
     return;
   }
 
+  const disponibilidad = await estaDisponible(barbero.id, fecha, hora);
+  if (!disponibilidad.disponible) {
+    await sock.sendMessage(numero, { text: `No se pudo agendar: ${disponibilidad.motivo}` });
+    return;
+  }
+
   const { error } = await supabase.from('citas').insert({
     barbero_id: barbero.id,
     cliente_telefono: numero,
@@ -38,5 +44,5 @@ module.exports = async function agendar({ texto, numero, sock }) {
     return;
   }
 
-  await sock.sendMessage(numero, { text: `Cita agendada para ${fecha} a las ${hora} ✅` });
+  await sock.sendMessage(numero, { text: `Cita agendada con ${nombreBarbero} el ${fecha} a las ${hora} ✅` });
 };
