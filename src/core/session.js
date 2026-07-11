@@ -1,12 +1,13 @@
-// Conexión y sesión de WhatsApp con Baileys
-const { default: makeWASocket, useMultiFileAuthState, DisconnectReason } = require('@whiskeysockets/baileys');
+// Conexión y sesión de WhatsApp con Baileys (persistencia en Supabase)
+const { default: makeWASocket, DisconnectReason } = require('@whiskeysockets/baileys');
 const qrcode = require('qrcode-terminal');
 const pino = require('pino');
+const { useSupabaseAuthState } = require('../db/authState');
 
 let sock;
 
 async function iniciarSesion(onMensaje) {
-  const { state, saveCreds } = await useMultiFileAuthState('auth_info');
+  const { state, saveCreds } = await useSupabaseAuthState();
 
   sock = makeWASocket({
     auth: state,
@@ -30,7 +31,6 @@ async function iniciarSesion(onMensaje) {
     }
   });
 
-  // Escucha mensajes entrantes y los pasa al router
   sock.ev.on('messages.upsert', async ({ messages }) => {
     const msg = messages[0];
     if (!msg.message || msg.key.fromMe) return;
