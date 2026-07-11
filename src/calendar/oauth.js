@@ -12,8 +12,13 @@ const oauth2Client = new google.auth.OAuth2(
 const SCOPES = ['https://www.googleapis.com/auth/calendar'];
 
 // Genera URL para que el barbero autorice acceso
-function generarUrlAuth() {
-  return oauth2Client.generateAuthUrl({ access_type: 'offline', scope: SCOPES, prompt: 'consent' });
+function generarUrlAuth(barberoId) {
+  return oauth2Client.generateAuthUrl({
+    access_type: 'offline',
+    scope: SCOPES,
+    prompt: 'consent',
+    state: barberoId,
+  });
 }
 
 // Guarda tokens en Supabase tras autorizar (usar en endpoint de callback)

@@ -31,14 +31,18 @@ module.exports = async function agendar({ texto, numero, sock }) {
     return;
   }
 
-  const { error } = await supabase.from('citas').insert({
-    barbero_id: barbero.id,
-    cliente_telefono: numero,
-    servicio_id: servicio.id,
-    fecha,
-    hora,
-    estado: 'pendiente',
-  });
+  const { data, error } = await supabase
+    .from('citas')
+    .insert({
+      barbero_id: barbero.id,
+      cliente_telefono: numero,
+      servicio_id: servicio.id,
+      fecha,
+      hora,
+      estado: 'pendiente',
+    })
+    .select()
+    .single();
 
   if (error) {
     await sock.sendMessage(numero, { text: 'Error al agendar la cita.' });
