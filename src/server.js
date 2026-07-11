@@ -6,12 +6,28 @@ const { obtenerQrActual } = require('./core/session');
 const QRCode = require('qrcode');
 const app = express();
 
-// Muestra el QR actual como imagen PNG para escanear desde el navegador
+// Página que muestra el QR y se auto-refresca cada 20s
 app.get('/qr', async (req, res) => {
+  res.setHeader('Cache-Control', 'no-store');
+  res.send(`
+    <html>
+      <head><meta http-equiv="refresh" content="20"></head>
+      <body style="text-align:center; font-family: sans-serif;">
+        <h3>Escanea el código QR</h3>
+        <img src="/qr-image?t=${Date.now()}" style="width:300px;height:300px;" />
+        <p>Esta página se actualiza cada 20 segundos</p>
+      </body>
+    </html>
+  `);
+});
+
+// Endpoint que sirve la imagen PNG cruda del QR
+app.get('/qr-image', async (req, res) => {
+  res.setHeader('Cache-Control', 'no-store');
   const qr = obtenerQrActual();
 
   if (!qr) {
-    return res.send('No hay QR disponible en este momento (ya conectado o aún generando).');
+    return res.send('Sin QR disponible (ya conectado o generando).');
   }
 
   try {
