@@ -1,10 +1,10 @@
 // Conexión y sesión de WhatsApp con Baileys (persistencia en Supabase)
 const { default: makeWASocket, DisconnectReason } = require('@whiskeysockets/baileys');
-const qrcode = require('qrcode-terminal');
 const pino = require('pino');
 const { useSupabaseAuthState } = require('../db/authState');
 
 let sock;
+let qrActual = null; // guarda el QR más reciente para exponerlo por HTTP
 
 async function iniciarSesion(onMensaje) {
   const { state, saveCreds } = await useSupabaseAuthState();
@@ -19,7 +19,10 @@ async function iniciarSesion(onMensaje) {
   sock.ev.on('connection.update', (update) => {
     const { connection, lastDisconnect, qr } = update;
 
-    if (qr) qrcode.generate(qr, { small: true });
+    if (qr) {
+      qrActual = qr;
+      console.log('Nuevo QR generado, visita /qr para escanearlo');
+    }
 
     if (connection === 'close') {
       const debeReconectar =
@@ -27,6 +30,7 @@ async function iniciarSesion(onMensaje) {
       console.log('Conexión cerrada. Reconectar:', debeReconectar);
       if (debeReconectar) iniciarSesion(onMensaje);
     } else if (connection === 'open') {
+      qrActual = null; // ya no hace falta el QR
       console.log('✅ Conectado a WhatsApp');
     }
   });
@@ -42,4 +46,8 @@ async function iniciarSesion(onMensaje) {
   return sock;
 }
 
-module.exports = { iniciarSesion };
+function obtenerQrActual() {
+  return qrActual;
+}
+
+module.exports = { iniciarSesion, obtenerQrActual };

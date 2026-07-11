@@ -1,8 +1,27 @@
 // Servidor Express para OAuth callback y auth inicial por barbero
 const express = require('express');
 const { generarUrlAuth, guardarTokens } = require('./calendar/oauth');
+const { obtenerQrActual } = require('./core/session');
 
+const QRCode = require('qrcode');
 const app = express();
+
+// Muestra el QR actual como imagen PNG para escanear desde el navegador
+app.get('/qr', async (req, res) => {
+  const qr = obtenerQrActual();
+
+  if (!qr) {
+    return res.send('No hay QR disponible en este momento (ya conectado o aún generando).');
+  }
+
+  try {
+    const png = await QRCode.toBuffer(qr, { type: 'png', width: 300 });
+    res.setHeader('Content-Type', 'image/png');
+    res.send(png);
+  } catch (err) {
+    res.status(500).send('Error al generar el QR');
+  }
+});
 
 // Genera el link de autorización para un barbero (uso manual una vez)
 app.get('/oauth/authorize', (req, res) => {
