@@ -28,7 +28,7 @@ const tools = [
 ];
 
 async function detectarIntent(texto) {
-  const model = genAI.getGenerativeModel({ model: 'gemini-1.5-flash', tools });
+  const model = genAI.getGenerativeModel({ model: 'gemini-3.5-flash', tools });
 
   const result = await model.generateContent(texto);
   const call = result.response.functionCalls()?.[0];

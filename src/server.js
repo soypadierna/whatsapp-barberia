@@ -6,7 +6,13 @@ const app = express();
 
 // Genera el link de autorización para un barbero (uso manual una vez)
 app.get('/oauth/authorize', (req, res) => {
-  const url = generarUrlAuth();
+  const { barbero_id } = req.query;
+
+  if (!barbero_id) {
+    return res.status(400).send('Falta barbero_id. Usa /oauth/authorize?barbero_id=1');
+  }
+
+  const url = generarUrlAuth(barbero_id);
   res.redirect(url);
 });
 
