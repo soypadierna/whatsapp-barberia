@@ -1,5 +1,6 @@
 // Cancela la última cita pendiente del cliente
 const { supabase } = require('../db/client');
+const { eliminarEvento } = require('../calendar/sync');
 
 module.exports = async function cancelar({ numero, sock }) {
   const { data: cita } = await supabase
@@ -17,5 +18,6 @@ module.exports = async function cancelar({ numero, sock }) {
   }
 
   await supabase.from('citas').update({ estado: 'cancelada' }).eq('id', cita.id);
+  await eliminarEvento({ citaId: cita.id, barberoId: cita.barbero_id });
   await sock.sendMessage(numero, { text: 'Tu cita fue cancelada ✅' });
 };

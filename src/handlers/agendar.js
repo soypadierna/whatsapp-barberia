@@ -1,6 +1,7 @@
 // Crea una cita validando disponibilidad del barbero
 const { supabase } = require('../db/client');
 const { estaDisponible } = require('../db/disponibilidad');
+const { crearEvento } = require('../calendar/sync');
 
 module.exports = async function agendar({ texto, numero, sock }) {
   const partes = texto.split(' ');
@@ -43,6 +44,14 @@ module.exports = async function agendar({ texto, numero, sock }) {
     await sock.sendMessage(numero, { text: 'Error al agendar la cita.' });
     return;
   }
+
+  await crearEvento({
+    citaId: data.id, // requiere .select().single() en el insert
+    barberoId: barbero.id,
+    fecha, hora,
+    servicioNombre: nombreServicio,
+    duracionMin: 30, // o traerlo de la tabla servicios
+  });
 
   await sock.sendMessage(numero, { text: `Cita agendada con ${nombreBarbero} el ${fecha} a las ${hora} ✅` });
 };

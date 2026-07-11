@@ -1,0 +1,1 @@
+ALTER TABLE citas ADD COLUMN calendar_event_id TEXT;
