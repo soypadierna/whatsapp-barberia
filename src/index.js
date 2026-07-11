@@ -1,6 +1,4 @@
 const { iniciarSesion } = require('./core/session');
+const { enrutarMensaje } = require('./core/router');
 
-iniciarSesion(async ({ texto, numero, sock }) => {
-  console.log(`Mensaje de ${numero}: ${texto}`);
-  await sock.sendMessage(numero, { text: 'Hola, recibí tu mensaje ✅' });
-});
+iniciarSesion(enrutarMensaje);
