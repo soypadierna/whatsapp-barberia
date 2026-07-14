@@ -20,6 +20,7 @@ async function iniciarSesion(onMensaje) {
 
   sock.ev.on('connection.update', (update) => {
     const { connection, lastDisconnect, qr } = update;
+    console.log('DEBUG connection.update:', JSON.stringify({ connection, qr: !!qr, error: lastDisconnect?.error?.message, statusCode: lastDisconnect?.error?.output?.statusCode }));
 
     if (qr) {
       qrActual = qr;
