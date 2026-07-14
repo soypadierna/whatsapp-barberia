@@ -5,7 +5,8 @@ const { supabase } = require('./client');
 // Guarda un valor en la tabla auth_sessions (serializado con BufferJSON para soportar Buffers)
 async function guardarDato(id, valor) {
   const data = JSON.parse(JSON.stringify(valor, BufferJSON.replacer));
-  await supabase.from('auth_sessions').upsert({ id, data, updated_at: new Date().toISOString() });
+  const { error } = await supabase.from('auth_sessions').upsert({ id, data, updated_at: new Date().toISOString() });
+  if (error) console.error('Error guardando sesión en Supabase:', error.message);
 }
 
 // Lee un valor de la tabla auth_sessions
