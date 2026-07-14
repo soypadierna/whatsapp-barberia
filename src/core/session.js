@@ -6,15 +6,9 @@ const { useSupabaseAuthState } = require('../db/authState');
 let sock;
 let qrActual = null;
 
-async function solicitarPairingCode(numero) {
-  if (!sock) throw new Error('Socket no inicializado');
-  const codigo = await sock.requestPairingCode(numero);
-  return codigo;
-}
-
 async function iniciarSesion(onMensaje) {
   const { state, saveCreds } = await useSupabaseAuthState();
-  const { version } = await fetchLatestBaileysVersion(); // evita error 405 por versión desactualizada
+  const { version } = await fetchLatestBaileysVersion();
 
   sock = makeWASocket({
     auth: state,
@@ -22,21 +16,31 @@ async function iniciarSesion(onMensaje) {
     logger: pino({ level: 'silent' }),
   });
 
+  // Si no está registrado y hay un número configurado, pide el pairing code apenas conecta
+  const numeroPairing = process.env.PAIRING_NUMBER;
+  if (!sock.authState.creds.registered && numeroPairing) {
+    setTimeout(async () => {
+      try {
+        const codigo = await sock.requestPairingCode(numeroPairing);
+        console.log('📱 CÓDIGO DE EMPAREJAMIENTO:', codigo);
+      } catch (err) {
+        console.log('Error solicitando pairing code:', err.message);
+      }
+    }, 3000); // Baileys recomienda esperar unos segundos tras crear el socket
+  }
+
   sock.ev.on('creds.update', saveCreds);
 
   sock.ev.on('connection.update', (update) => {
     const { connection, lastDisconnect, qr } = update;
     console.log('DEBUG connection.update:', JSON.stringify({ connection, qr: !!qr, error: lastDisconnect?.error?.message, statusCode: lastDisconnect?.error?.output?.statusCode }));
 
-    if (qr) {
-      qrActual = qr;
-      console.log('Nuevo QR generado, visita /qr para escanearlo');
-    }
+    if (qr) qrActual = qr;
 
     if (connection === 'close') {
       const debeReconectar =
         lastDisconnect?.error?.output?.statusCode !== DisconnectReason.loggedOut;
-      console.log('Conexión cerrada. Código:', lastDisconnect?.error?.output?.statusCode, 'Reconectar:', debeReconectar);
+      console.log('Conexión cerrada. Reconectar:', debeReconectar);
       if (debeReconectar) iniciarSesion(onMensaje);
     } else if (connection === 'open') {
       qrActual = null;
@@ -59,4 +63,4 @@ function obtenerQrActual() {
   return qrActual;
 }
 
-module.exports = { iniciarSesion, obtenerQrActual, solicitarPairingCode };
+module.exports = { iniciarSesion, obtenerQrActual };
