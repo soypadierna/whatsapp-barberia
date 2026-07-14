@@ -1,10 +1,13 @@
 // Conexión y sesión de WhatsApp con Baileys (persistencia en Supabase)
 const { default: makeWASocket, DisconnectReason, fetchLatestBaileysVersion } = require('@whiskeysockets/baileys');
 const pino = require('pino');
+const { EventEmitter } = require('events');
 const { useSupabaseAuthState } = require('../db/authState');
 
 let sock;
 let qrActual = null;
+let conectado = false;
+const emisorQr = new EventEmitter(); // emite 'qr' y 'conectado' para SSE
 
 async function iniciarSesion(onMensaje) {
   const { state, saveCreds } = await useSupabaseAuthState();
@@ -16,26 +19,16 @@ async function iniciarSesion(onMensaje) {
     logger: pino({ level: 'silent' }),
   });
 
-  // Si no está registrado y hay un número configurado, pide el pairing code apenas conecta
-  const numeroPairing = process.env.PAIRING_NUMBER;
-  if (!sock.authState.creds.registered && numeroPairing) {
-    setTimeout(async () => {
-      try {
-        const codigo = await sock.requestPairingCode(numeroPairing);
-        console.log('📱 CÓDIGO DE EMPAREJAMIENTO:', codigo);
-      } catch (err) {
-        console.log('Error solicitando pairing code:', err.message);
-      }
-    }, 3000); // Baileys recomienda esperar unos segundos tras crear el socket
-  }
-
   sock.ev.on('creds.update', saveCreds);
 
   sock.ev.on('connection.update', (update) => {
     const { connection, lastDisconnect, qr } = update;
-    console.log('DEBUG connection.update:', JSON.stringify({ connection, qr: !!qr, error: lastDisconnect?.error?.message, statusCode: lastDisconnect?.error?.output?.statusCode }));
 
-    if (qr) qrActual = qr;
+    if (qr) {
+      qrActual = qr;
+      conectado = false;
+      emisorQr.emit('qr', qr);
+    }
 
     if (connection === 'close') {
       const debeReconectar =
@@ -44,7 +37,9 @@ async function iniciarSesion(onMensaje) {
       if (debeReconectar) iniciarSesion(onMensaje);
     } else if (connection === 'open') {
       qrActual = null;
+      conectado = true;
       console.log('✅ Conectado a WhatsApp');
+      emisorQr.emit('conectado');
     }
   });
 
@@ -59,8 +54,7 @@ async function iniciarSesion(onMensaje) {
   return sock;
 }
 
-function obtenerQrActual() {
-  return qrActual;
-}
+function obtenerQrActual() { return qrActual; }
+function estaConectado() { return conectado; }
 
-module.exports = { iniciarSesion, obtenerQrActual };
+module.exports = { iniciarSesion, obtenerQrActual, estaConectado, emisorQr };

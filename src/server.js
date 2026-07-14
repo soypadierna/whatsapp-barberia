@@ -1,7 +1,7 @@
 // Servidor Express para OAuth callback y auth inicial por barbero
 const express = require('express');
 const { generarUrlAuth, guardarTokens } = require('./calendar/oauth');
-const { obtenerQrActual } = require('./core/session');
+const { obtenerQrActual, estaConectado, emisorQr } = require('./core/session');
 const { solicitarPairingCode } = require('./core/session');
 
 const QRCode = require('qrcode');
@@ -23,37 +23,88 @@ app.get('/pair', async (req, res) => {
   }
 });
 
-// Página que muestra el QR y se auto-refresca cada 20s
-app.get('/qr', async (req, res) => {
+// Página con diseño tipo WhatsApp Web, se actualiza en tiempo real vía SSE (sin recargar)
+app.get('/qr', (req, res) => {
   res.setHeader('Cache-Control', 'no-store');
   res.send(`
-    <html>
-      <head><meta http-equiv="refresh" content="5"></head>
-      <body style="text-align:center; font-family: sans-serif;">
-        <h3>Escanea el código QR</h3>
-        <img src="/qr-image?t=${Date.now()}" style="width:300px;height:300px;" />
-        <p>Escanea apenas cargue la página. Se actualiza cada 5 segundos.</p>
-      </body>
-    </html>
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<title>Vincular WhatsApp</title>
+<style>
+  body {
+    background: #f0f2f5;
+    font-family: -apple-system, Segoe UI, Roboto, sans-serif;
+    display: flex; justify-content: center; align-items: center;
+    height: 100vh; margin: 0;
+  }
+  .card {
+    background: white; border-radius: 12px; padding: 40px;
+    box-shadow: 0 2px 10px rgba(0,0,0,0.1); text-align: center; width: 340px;
+  }
+  h2 { color: #075E54; margin-bottom: 8px; }
+  p { color: #667781; font-size: 14px; }
+  #qr-img { width: 260px; height: 260px; margin: 20px 0; border: 1px solid #eee; border-radius: 8px; }
+  .ok { color: #128C7E; font-size: 18px; font-weight: bold; }
+</style>
+</head>
+<body>
+  <div class="card">
+    <h2>WhatsApp Barbería</h2>
+    <div id="contenido">
+      <p>Esperando código QR...</p>
+    </div>
+  </div>
+
+  <script>
+    const contenido = document.getElementById('contenido');
+    const evtSource = new EventSource('/qr-stream');
+
+    evtSource.addEventListener('qr', (e) => {
+      contenido.innerHTML = '<img id="qr-img" src="' + e.data + '" /><p>Escanea con WhatsApp > Dispositivos vinculados</p>';
+    });
+
+    evtSource.addEventListener('conectado', () => {
+      contenido.innerHTML = '<p class="ok">✅ Conectado correctamente</p>';
+      evtSource.close();
+    });
+  </script>
+</body>
+</html>
   `);
 });
 
-// Endpoint que sirve la imagen PNG cruda del QR
-app.get('/qr-image', async (req, res) => {
+// Server-Sent Events: empuja el QR (como data URL base64) o el estado "conectado" en tiempo real
+app.get('/qr-stream', (req, res) => {
+  res.setHeader('Content-Type', 'text/event-stream');
   res.setHeader('Cache-Control', 'no-store');
-  const qr = obtenerQrActual();
+  res.setHeader('Connection', 'keep-alive');
+  res.flushHeaders();
 
-  if (!qr) {
-    return res.send('Sin QR disponible (ya conectado o generando).');
+  const enviarQr = async (qr) => {
+    const dataUrl = await QRCode.toDataURL(qr, { width: 260 });
+    res.write(`event: qr\ndata: ${dataUrl}\n\n`);
+  };
+
+  const enviarConectado = () => {
+    res.write(`event: conectado\ndata: ok\n\n`);
+  };
+
+  // Estado inicial al conectar el cliente
+  if (estaConectado()) {
+    enviarConectado();
+  } else if (obtenerQrActual()) {
+    enviarQr(obtenerQrActual());
   }
 
-  try {
-    const png = await QRCode.toBuffer(qr, { type: 'png', width: 300 });
-    res.setHeader('Content-Type', 'image/png');
-    res.send(png);
-  } catch (err) {
-    res.status(500).send('Error al generar el QR');
-  }
+  emisorQr.on('qr', enviarQr);
+  emisorQr.on('conectado', enviarConectado);
+
+  req.on('close', () => {
+    emisorQr.off('qr', enviarQr);
+    emisorQr.off('conectado', enviarConectado);
+  });
 });
 
 // Genera el link de autorización para un barbero (uso manual una vez)
