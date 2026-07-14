@@ -6,6 +6,12 @@ const { useSupabaseAuthState } = require('../db/authState');
 let sock;
 let qrActual = null;
 
+async function solicitarPairingCode(numero) {
+  if (!sock) throw new Error('Socket no inicializado');
+  const codigo = await sock.requestPairingCode(numero);
+  return codigo;
+}
+
 async function iniciarSesion(onMensaje) {
   const { state, saveCreds } = await useSupabaseAuthState();
   const { version } = await fetchLatestBaileysVersion(); // evita error 405 por versión desactualizada
@@ -53,4 +59,4 @@ function obtenerQrActual() {
   return qrActual;
 }
 
-module.exports = { iniciarSesion, obtenerQrActual };
+module.exports = { iniciarSesion, obtenerQrActual, solicitarPairingCode };

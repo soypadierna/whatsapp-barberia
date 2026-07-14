@@ -2,9 +2,26 @@
 const express = require('express');
 const { generarUrlAuth, guardarTokens } = require('./calendar/oauth');
 const { obtenerQrActual } = require('./core/session');
+const { solicitarPairingCode } = require('./core/session');
 
 const QRCode = require('qrcode');
 const app = express();
+
+// Solicita un código de emparejamiento de 8 dígitos para un número específico
+app.get('/pair', async (req, res) => {
+  const { numero } = req.query; // formato: 573001112233 (sin +, sin espacios)
+
+  if (!numero) {
+    return res.send('Usa /pair?numero=573001112233 (código de país + número, sin +)');
+  }
+
+  try {
+    const codigo = await solicitarPairingCode(numero);
+    res.send(`Tu código de emparejamiento es: <b>${codigo}</b><br>Ingrésalo en WhatsApp > Dispositivos vinculados > Vincular con número de teléfono`);
+  } catch (err) {
+    res.status(500).send('Error al generar código: ' + err.message);
+  }
+});
 
 // Página que muestra el QR y se auto-refresca cada 20s
 app.get('/qr', async (req, res) => {
