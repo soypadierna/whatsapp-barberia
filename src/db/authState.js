@@ -57,4 +57,11 @@ async function useSupabaseAuthState() {
   return { state: { creds, keys }, saveCreds };
 }
 
-module.exports = { useSupabaseAuthState };
+// Borra todos los registros de auth_sessions (fuerza generación de QR nuevo)
+async function limpiarSesionCompleta() {
+  const { error } = await supabase.from('auth_sessions').delete().neq('id', '');
+  if (error) console.error('Error limpiando sesión:', error.message);
+  else console.log('🧹 Sesión de Supabase limpiada por logout detectado');
+}
+
+module.exports = { useSupabaseAuthState, limpiarSesionCompleta };

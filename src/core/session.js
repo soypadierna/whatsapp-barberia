@@ -2,12 +2,12 @@
 const { default: makeWASocket, DisconnectReason, fetchLatestBaileysVersion } = require('@whiskeysockets/baileys');
 const pino = require('pino');
 const { EventEmitter } = require('events');
-const { useSupabaseAuthState } = require('../db/authState');
+const { useSupabaseAuthState, limpiarSesionCompleta } = require('../db/authState');
 
 let sock;
 let qrActual = null;
 let conectado = false;
-const emisorQr = new EventEmitter(); // emite 'qr' y 'conectado' para SSE
+const emisorQr = new EventEmitter();
 
 async function iniciarSesion(onMensaje) {
   const { state, saveCreds } = await useSupabaseAuthState();
@@ -21,7 +21,7 @@ async function iniciarSesion(onMensaje) {
 
   sock.ev.on('creds.update', saveCreds);
 
-  sock.ev.on('connection.update', (update) => {
+  sock.ev.on('connection.update', async (update) => {
     const { connection, lastDisconnect, qr } = update;
 
     if (qr) {
@@ -31,11 +31,23 @@ async function iniciarSesion(onMensaje) {
     }
 
     if (connection === 'close') {
-      const debeReconectar =
-        lastDisconnect?.error?.output?.statusCode !== DisconnectReason.loggedOut;
-      console.log('Conexión cerrada. Reconectar:', debeReconectar);
-      if (debeReconectar) iniciarSesion(onMensaje);
-    } else if (connection === 'open') {
+      const codigo = lastDisconnect?.error?.output?.statusCode;
+      const esLogout = codigo === DisconnectReason.loggedOut;
+
+      if (esLogout) {
+        // Sesión inválida real: limpiar Supabase y reiniciar desde cero para forzar QR nuevo
+        console.log('⚠️ Sesión inválida (logout). Limpiando y regenerando QR automáticamente...');
+        await limpiarSesionCompleta();
+        setTimeout(() => iniciarSesion(onMensaje), 1000);
+      } else {
+        // Error de red u otro tipo: reconectar con la misma sesión
+        console.log('Conexión cerrada por error de red. Reconectando con sesión existente...');
+        iniciarSesion(onMensaje);
+      }
+      return;
+    }
+
+    if (connection === 'open') {
       qrActual = null;
       conectado = true;
       console.log('✅ Conectado a WhatsApp');
