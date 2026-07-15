@@ -3,6 +3,7 @@ const { default: makeWASocket, DisconnectReason, fetchLatestBaileysVersion } = r
 const pino = require('pino');
 const { EventEmitter } = require('events');
 const { useSupabaseAuthState, limpiarSesionCompleta } = require('../db/authState');
+const logger = require('../utils/logger');
 
 let sock;
 let qrActual = null;
@@ -27,21 +28,28 @@ async function iniciarSesion(onMensaje) {
     if (qr) {
       qrActual = qr;
       conectado = false;
+      logger.conexion('QR generado, esperando escaneo');
       emisorQr.emit('qr', qr);
+    }
+
+    if (connection === 'connecting') {
+      logger.conexion('Conectando a WhatsApp...');
     }
 
     if (connection === 'close') {
       const codigo = lastDisconnect?.error?.output?.statusCode;
+      const motivo = lastDisconnect?.error?.message || 'desconocido';
       const esLogout = codigo === DisconnectReason.loggedOut;
 
+      logger.conexion(`Desconectado. Código: ${codigo}, Motivo: ${motivo}, Logout: ${esLogout}`);
+
       if (esLogout) {
-        // Sesión inválida real: limpiar Supabase y reiniciar desde cero para forzar QR nuevo
-        console.log('⚠️ Sesión inválida (logout). Limpiando y regenerando QR automáticamente...');
+        logger.sesion('Sesión inválida detectada, limpiando Supabase automáticamente');
         await limpiarSesionCompleta();
+        logger.conexion('Reiniciando conexión para generar QR nuevo');
         setTimeout(() => iniciarSesion(onMensaje), 1000);
       } else {
-        // Error de red u otro tipo: reconectar con la misma sesión
-        console.log('Conexión cerrada por error de red. Reconectando con sesión existente...');
+        logger.conexion('Reconectando con sesión existente...');
         iniciarSesion(onMensaje);
       }
       return;
@@ -50,17 +58,24 @@ async function iniciarSesion(onMensaje) {
     if (connection === 'open') {
       qrActual = null;
       conectado = true;
-      console.log('✅ Conectado a WhatsApp');
+      logger.conexion('✅ Conectado a WhatsApp');
       emisorQr.emit('conectado');
     }
   });
 
   sock.ev.on('messages.upsert', async ({ messages }) => {
-    const msg = messages[0];
-    if (!msg.message || msg.key.fromMe) return;
-    const texto = msg.message.conversation || msg.message.extendedTextMessage?.text || '';
-    const numero = msg.key.remoteJid;
-    if (onMensaje) await onMensaje({ texto, numero, sock });
+    try {
+      const msg = messages[0];
+      if (!msg.message || msg.key.fromMe) return;
+      const texto = msg.message.conversation || msg.message.extendedTextMessage?.text || '';
+      const numero = msg.key.remoteJid;
+
+      logger.mensaje(`Recibido de ${logger.enmascararNumero(numero)}: "${texto.slice(0, 50)}"`);
+
+      if (onMensaje) await onMensaje({ texto, numero, sock });
+    } catch (err) {
+      logger.error('Error no capturado procesando mensaje', err.stack);
+    }
   });
 
   return sock;

@@ -2,16 +2,20 @@
 const { initAuthCreds, BufferJSON } = require('@whiskeysockets/baileys');
 const { supabase } = require('./client');
 
+const logger = require('../utils/logger');
+
 // Guarda un valor en la tabla auth_sessions (serializado con BufferJSON para soportar Buffers)
 async function guardarDato(id, valor) {
   const data = JSON.parse(JSON.stringify(valor, BufferJSON.replacer));
   const { error } = await supabase.from('auth_sessions').upsert({ id, data, updated_at: new Date().toISOString() });
-  if (error) console.error('Error guardando sesión en Supabase:', error.message);
+  if (error) logger.error(`Fallo al guardar sesión (${id})`, error.message);
+  else logger.sesion(`Guardado OK: ${id}`);
 }
 
 // Lee un valor de la tabla auth_sessions
 async function leerDato(id) {
-  const { data } = await supabase.from('auth_sessions').select('data').eq('id', id).maybeSingle();
+  const { data, error } = await supabase.from('auth_sessions').select('data').eq('id', id).maybeSingle();
+  if (error) logger.error(`Fallo al leer sesión (${id})`, error.message);
   if (!data) return null;
   return JSON.parse(JSON.stringify(data.data), BufferJSON.reviver);
 }

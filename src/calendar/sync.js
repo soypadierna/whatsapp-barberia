@@ -3,41 +3,67 @@ const { google } = require('googleapis');
 const { obtenerClienteBarbero } = require('./oauth');
 const { supabase } = require('../db/client');
 
+const logger = require('../utils/logger');
+
 // Crea evento en Calendar y guarda el event_id en la cita
 async function crearEvento({ citaId, barberoId, fecha, hora, servicioNombre, duracionMin }) {
   const auth = await obtenerClienteBarbero(barberoId);
-  if (!auth) return null;
+  if (!auth) {
+    logger.calendar(`Barbero ${barberoId} sin OAuth configurado, se omite sync`);
+    return null;
+  }
 
-  const calendar = google.calendar({ version: 'v3', auth });
+  try {
+    const calendar = google.calendar({ version: 'v3', auth });
+    const inicio = new Date(`${fecha}T${hora}:00`);
+    const fin = new Date(inicio.getTime() + duracionMin * 60000);
 
-  const inicio = new Date(`${fecha}T${hora}:00`);
-  const fin = new Date(inicio.getTime() + duracionMin * 60000);
+    const evento = await calendar.events.insert({
+      calendarId: 'primary',
+      requestBody: {
+        summary: `Cita: ${servicioNombre}`,
+        start: { dateTime: inicio.toISOString() },
+        end: { dateTime: fin.toISOString() },
+      },
+    });
 
-  const evento = await calendar.events.insert({
-    calendarId: 'primary',
-    requestBody: {
-      summary: `Cita: ${servicioNombre}`,
-      start: { dateTime: inicio.toISOString() },
-      end: { dateTime: fin.toISOString() },
-    },
-  });
-
-  await supabase.from('citas').update({ calendar_event_id: evento.data.id }).eq('id', citaId);
-  return evento.data.id;
+    await supabase.from('citas').update({ calendar_event_id: evento.data.id }).eq('id', citaId);
+    logger.calendar(`Evento creado OK para barbero ${barberoId}, cita ${citaId}`);
+    return evento.data.id;
+  } catch (err) {
+    logger.error(`Fallo creando evento Calendar para barbero ${barberoId}`, err.message);
+    return null;
+  }
 }
 
 // Elimina evento de Calendar al cancelar cita
 async function eliminarEvento({ citaId, barberoId }) {
-  const { data: cita } = await supabase
+  const { data: cita, error: errorLectura } = await supabase
     .from('citas').select('calendar_event_id').eq('id', citaId).single();
 
-  if (!cita?.calendar_event_id) return;
+  if (errorLectura) {
+    logger.error(`Fallo leyendo cita ${citaId} para eliminar evento`, errorLectura.message);
+    return;
+  }
+
+  if (!cita?.calendar_event_id) {
+    logger.calendar(`Cita ${citaId} no tiene evento de Calendar asociado, nada que borrar`);
+    return;
+  }
 
   const auth = await obtenerClienteBarbero(barberoId);
-  if (!auth) return;
+  if (!auth) {
+    logger.calendar(`Barbero ${barberoId} sin OAuth configurado, se omite eliminación en Calendar`);
+    return;
+  }
 
-  const calendar = google.calendar({ version: 'v3', auth });
-  await calendar.events.delete({ calendarId: 'primary', eventId: cita.calendar_event_id });
+  try {
+    const calendar = google.calendar({ version: 'v3', auth });
+    await calendar.events.delete({ calendarId: 'primary', eventId: cita.calendar_event_id });
+    logger.calendar(`Evento eliminado OK para barbero ${barberoId}, cita ${citaId}`);
+  } catch (err) {
+    logger.error(`Fallo eliminando evento Calendar para barbero ${barberoId}, cita ${citaId}`, err.message);
+  }
 }
 
 module.exports = { crearEvento, eliminarEvento };
