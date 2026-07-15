@@ -1,3 +1,4 @@
+// Router de intents usando Gemini
 const handlers = {
   agendar: require('../handlers/agendar'),
   cancelar: require('../handlers/cancelar'),
@@ -7,7 +8,7 @@ const handlers = {
 };
 
 const { detectarIntent } = require('../ai/gemini');
-
+const { obtenerEstado } = require('./estadoConversacion');
 const logger = require('../utils/logger');
 
 async function enrutarMensaje({ texto, numero, sock }) {
