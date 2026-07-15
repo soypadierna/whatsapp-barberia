@@ -12,6 +12,10 @@ module.exports = async function agendar({ texto, numero, sock }) {
   if (!estado) {
     const { data: servicios } = await supabase.from('servicios').select('*');
 
+    if (error) {
+      console.log('ERROR leyendo servicios:', error.message);
+    }
+
     if (!servicios?.length) {
       await sock.sendMessage(numero, { text: 'No hay servicios disponibles por ahora.' });
       return;
