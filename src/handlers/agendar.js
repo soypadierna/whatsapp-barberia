@@ -10,7 +10,7 @@ module.exports = async function agendar({ texto, numero, sock }) {
 
   // Paso 0: inicia el flujo, muestra servicios disponibles
   if (!estado) {
-    const { data: servicios } = await supabase.from('servicios').select('*');
+    const { data: servicios, error } = await supabase.from('servicios').select('*');
 
     if (error) {
       console.log('ERROR leyendo servicios:', error.message);
