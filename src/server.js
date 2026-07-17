@@ -89,23 +89,59 @@ app.get('/qr', (req, res) => {
   `);
 });
 
+// Página de diagnóstico: muestra el QR crudo como texto (igual que en consola), sin conversión a imagen
+app.get('/qr-raw', (req, res) => {
+  res.setHeader('Cache-Control', 'no-store');
+  res.send(`
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<title>QR crudo (diagnóstico)</title>
+<style>
+  body { background: #1e1e1e; color: #0f0; font-family: monospace; padding: 20px; }
+  pre { white-space: pre-wrap; word-break: break-all; font-size: 12px; }
+  .ok { color: #0ff; font-size: 18px; font-weight: bold; }
+</style>
+</head>
+<body>
+  <h3>QR crudo (string tal cual lo emite Baileys)</h3>
+  <div id="contenido"><pre>Esperando QR...</pre></div>
+
+  <script>
+    const contenido = document.getElementById('contenido');
+    const evtSource = new EventSource('/qr-raw-stream');
+
+    evtSource.addEventListener('qr', (e) => {
+      contenido.innerHTML = '<pre>' + e.data + '</pre>';
+    });
+
+    evtSource.addEventListener('conectado', () => {
+      contenido.innerHTML = '<p class="ok">✅ Conectado correctamente</p>';
+      evtSource.close();
+    });
+  </script>
+</body>
+</html>
+  `);
+});
+
 // Server-Sent Events: empuja el QR (como data URL base64) o el estado "conectado" en tiempo real
-app.get('/qr-stream', (req, res) => {
+// SSE que empuja el string crudo del QR (sin conversión a imagen), para diagnóstico
+app.get('/qr-raw-stream', (req, res) => {
   res.setHeader('Content-Type', 'text/event-stream');
   res.setHeader('Cache-Control', 'no-store');
   res.setHeader('Connection', 'keep-alive');
   res.flushHeaders();
 
-  const enviarQr = async (qr) => {
-    const dataUrl = await QRCode.toDataURL(qr, { width: 260 });
-    res.write(`event: qr\ndata: ${dataUrl}\n\n`);
+  const enviarQr = (qr) => {
+    res.write(`event: qr\ndata: ${qr}\n\n`);
   };
 
   const enviarConectado = () => {
     res.write(`event: conectado\ndata: ok\n\n`);
   };
 
-  // Estado inicial al conectar el cliente
   if (estaConectado()) {
     enviarConectado();
   } else if (obtenerQrActual()) {
@@ -120,7 +156,6 @@ app.get('/qr-stream', (req, res) => {
     emisorQr.off('conectado', enviarConectado);
   });
 });
-
 // Genera el link de autorización para un barbero (uso manual una vez)
 app.get('/oauth/authorize', (req, res) => {
   const { barbero_id } = req.query;
