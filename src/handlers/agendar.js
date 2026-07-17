@@ -2,8 +2,9 @@
 const { supabase } = require('../db/client');
 const { crearEvento } = require('../calendar/sync');
 const { obtenerHorariosLibres } = require('../calendar/disponibilidad');
-const { generarRespuestaNatural } = require('../ai/gemini');
+const { generarRespuestaNatural, interpretarSeleccion } = require('../ai/gemini');
 const { obtenerEstado, setEstado, limpiarEstado } = require('../core/estadoConversacion');
+
 
 module.exports = async function agendar({ texto, numero, sock }) {
   const estado = obtenerEstado(numero);
@@ -30,12 +31,12 @@ module.exports = async function agendar({ texto, numero, sock }) {
     return;
   }
 
-  // Paso 1: elige servicio, muestra barberos disponibles
+// Paso 1: elige servicio, muestra barberos disponibles
   if (estado.paso === 'servicio') {
-    const servicio = encontrarPorNumeroONombre(texto, estado.servicios, 'nombre');
+    const servicio = await interpretarSeleccion(texto, estado.servicios);
 
     if (!servicio) {
-      await sock.sendMessage(numero, { text: 'No reconocí ese servicio. Intenta de nuevo con el número o nombre exacto.' });
+      await sock.sendMessage(numero, { text: 'No reconocí ese servicio. ¿Puedes escribirlo de nuevo o el número de la lista?' });
       return;
     }
 
@@ -47,12 +48,12 @@ module.exports = async function agendar({ texto, numero, sock }) {
     return;
   }
 
-  // Paso 2: elige barbero, pide fecha
+// Paso 2: elige barbero, pide fecha
   if (estado.paso === 'barbero') {
-    const barbero = encontrarPorNumeroONombre(texto, estado.barberos, 'nombre');
+    const barbero = await interpretarSeleccion(texto, estado.barberos);
 
     if (!barbero) {
-      await sock.sendMessage(numero, { text: 'No reconocí ese barbero. Intenta de nuevo.' });
+      await sock.sendMessage(numero, { text: 'No reconocí ese barbero. ¿Puedes escribirlo de nuevo o el número de la lista?' });
       return;
     }
 
@@ -90,15 +91,29 @@ module.exports = async function agendar({ texto, numero, sock }) {
     return;
   }
 
-  // Paso 4: recibe hora elegida (de las opciones sugeridas), valida y agenda
+  // Paso 4: recibe hora (libre, cualquier formato HH:MM), valida disponibilidad real antes de confirmar
   if (estado.paso === 'hora') {
-    const { servicio, barbero, fecha, opciones } = estado;
+    const { servicio, barbero, fecha } = estado;
     const horaMatch = texto.match(/\d{1,2}:\d{2}/);
     const hora = horaMatch ? horaMatch[0].padStart(5, '0') : null;
 
-    if (!hora || !opciones.includes(hora)) {
-      await sock.sendMessage(numero, { text: `Elige una de estas horas: ${opciones.join(', ')}` });
+    if (!hora) {
+      await sock.sendMessage(numero, { text: 'No entendí la hora. Escríbela en formato HH:MM, ej. 15:00' });
       return;
+    }
+
+    const disponibilidad = await estaDisponible(barbero.id, fecha, hora);
+
+    if (!disponibilidad.disponible) {
+      const libres = await obtenerHorariosLibres(barbero, fecha, servicio.duracion_min);
+      const respuesta = await generarRespuestaNatural({
+        tipo: 'horario_no_disponible',
+        motivo: disponibilidad.motivo,
+        barbero: barbero.nombre,
+        alternativas: libres.slice(0, 3),
+      });
+      await sock.sendMessage(numero, { text: respuesta });
+      return; // se queda en el mismo paso para que elija otra hora
     }
 
     const { data, error } = await supabase
@@ -139,13 +154,3 @@ module.exports = async function agendar({ texto, numero, sock }) {
     return;
   }
 };
-
-// Busca un item por número de lista (ej. "1") o por coincidencia de nombre
-function encontrarPorNumeroONombre(texto, lista, campoNombre) {
-  const t = texto.trim().toLowerCase();
-  const numeroIndex = parseInt(t) - 1;
-
-  if (!isNaN(numeroIndex) && lista[numeroIndex]) return lista[numeroIndex];
-
-  return lista.find(item => item[campoNombre].toLowerCase().includes(t));
-}

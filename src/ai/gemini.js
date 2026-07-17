@@ -61,4 +61,18 @@ Responde SOLO con el mensaje final para el cliente, sin explicaciones ni comilla
   return result.response.text().trim();
 }
 
-module.exports = { detectarIntent, generarRespuestaNatural };
+// Interpreta con Gemini cuál servicio de la lista quiso decir el cliente, tolerando errores de tipeo
+async function interpretarSeleccion(texto, opciones) {
+  const model = genAI.getGenerativeModel({ model: 'gemini-3.5-flash' });
+
+  const lista = opciones.map((o, i) => `${i + 1}. ${o.nombre}`).join('\n');
+  const prompt = `El cliente escribió: "${texto}"\n\nOpciones disponibles:\n${lista}\n\n¿A cuál número de la lista se refiere, considerando posibles errores de tipeo o formas distintas de escribirlo? Responde SOLO con el número, o "0" si no coincide con ninguna.`;
+
+  const result = await model.generateContent(prompt);
+  const respuesta = result.response.text().trim();
+  const numero = parseInt(respuesta.match(/\d+/)?.[0] || '0');
+
+  return numero > 0 && opciones[numero - 1] ? opciones[numero - 1] : null;
+}
+
+module.exports = { detectarIntent, generarRespuestaNatural, interpretarSeleccion };
