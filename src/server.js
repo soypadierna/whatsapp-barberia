@@ -23,7 +23,7 @@ app.get('/pair', async (req, res) => {
   }
 });
 
-// Página con diseño tipo WhatsApp Web, se actualiza en tiempo real vía SSE (sin recargar)
+// Página definitiva: QR en ASCII (método confirmado que funciona), con diseño limpio tipo WhatsApp Web
 app.get('/qr', (req, res) => {
   res.setHeader('Cache-Control', 'no-store');
   res.send(`
@@ -40,81 +40,35 @@ app.get('/qr', (req, res) => {
     height: 100vh; margin: 0;
   }
   .card {
-    background: white; border-radius: 12px; padding: 40px;
-    box-shadow: 0 2px 10px rgba(0,0,0,0.1); text-align: center; width: 340px;
+    background: white; border-radius: 12px; padding: 30px;
+    box-shadow: 0 2px 10px rgba(0,0,0,0.1); text-align: center;
   }
-  h2 { color: #075E54; margin-bottom: 8px; }
-  p { color: #667781; font-size: 14px; }
-  #qr-img { width: 260px; height: 260px; margin: 20px 0; border: 1px solid #eee; border-radius: 8px; }
+  h2 { color: #075E54; margin-bottom: 4px; }
+  p { color: #667781; font-size: 14px; margin-top: 12px; }
+  pre {
+    background: #fff; color: #111;
+    font-family: 'Consolas', 'Menlo', monospace;
+    font-size: 8px; line-height: 8px;
+    padding: 12px; border-radius: 8px;
+    border: 1px solid #e0e0e0;
+    display: inline-block; text-align: left; margin: 0;
+  }
   .ok { color: #128C7E; font-size: 18px; font-weight: bold; }
 </style>
 </head>
 <body>
   <div class="card">
     <h2>WhatsApp Barbería</h2>
-    <div id="contenido">
-      <p>Esperando código QR...</p>
-    </div>
+    <div id="contenido"><p>Esperando código QR...</p></div>
   </div>
-
-<script>
-    const contenido = document.getElementById('contenido');
-    const evtSource = new EventSource('/qr-stream');
-    let countdownInterval;
-
-    function iniciarCountdown(segundos) {
-      clearInterval(countdownInterval);
-      let restante = segundos;
-      const badge = document.getElementById('countdown');
-      countdownInterval = setInterval(() => {
-        restante--;
-        if (badge) badge.textContent = restante > 0 ? 'Expira en ' + restante + 's' : 'Generando nuevo código...';
-        if (restante <= 0) clearInterval(countdownInterval);
-      }, 1000);
-    }
-
-    evtSource.addEventListener('qr', (e) => {
-      contenido.innerHTML = '<img id="qr-img" src="' + e.data + '" /><p>Escanea con WhatsApp > Dispositivos vinculados</p><p id="countdown" style="color:#128C7E;font-weight:bold;"></p>';
-      iniciarCountdown(20);
-    });
-
-    evtSource.addEventListener('conectado', () => {
-      clearInterval(countdownInterval);
-      contenido.innerHTML = '<p class="ok">✅ Conectado correctamente</p>';
-      evtSource.close();
-    });
-  </script>
-</body>
-</html>
-  `);
-});
-
-// Página de diagnóstico: QR en ASCII estilo terminal (escaneable), sin tocar /qr
-app.get('/qr-raw', (req, res) => {
-  res.setHeader('Cache-Control', 'no-store');
-  res.send(`
-<!DOCTYPE html>
-<html lang="es">
-<head>
-<meta charset="UTF-8">
-<title>QR ASCII (diagnóstico)</title>
-<style>
-  body { background: #1e1e1e; color: #0f0; font-family: monospace; padding: 20px; }
-  pre { font-size: 8px; line-height: 8px; }
-  .ok { color: #0ff; font-size: 18px; font-weight: bold; }
-</style>
-</head>
-<body>
-  <h3>QR ASCII (estilo terminal)</h3>
-  <div id="contenido"><pre>Esperando QR...</pre></div>
 
   <script>
     const contenido = document.getElementById('contenido');
-    const evtSource = new EventSource('/qr-raw-stream');
+    const evtSource = new EventSource('/qr-stream');
 
     evtSource.addEventListener('qr', (e) => {
       const ascii = JSON.parse(e.data);
-      contenido.innerHTML = '<pre>' + ascii + '</pre>';
+      contenido.innerHTML = '<pre>' + ascii + '</pre><p>Escanea con WhatsApp > Dispositivos vinculados</p>';
     });
 
     evtSource.addEventListener('conectado', () => {
@@ -128,8 +82,8 @@ app.get('/qr-raw', (req, res) => {
 });
 
 // Server-Sent Events: empuja el QR (como data URL base64) o el estado "conectado" en tiempo real
-// SSE que empuja el string crudo del QR (sin conversión a imagen), para diagnóstico
-app.get('/qr-raw-stream', (req, res) => {
+// SSE que empuja el QR como ASCII escaneable (único método de generación de QR en el proyecto)
+app.get('/qr-stream', (req, res) => {
   res.setHeader('Content-Type', 'text/event-stream');
   res.setHeader('Cache-Control', 'no-store');
   res.setHeader('Connection', 'keep-alive');
