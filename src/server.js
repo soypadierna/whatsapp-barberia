@@ -45,10 +45,11 @@ app.get('/qr', (req, res) => {
   }
   h2 { color: #075E54; margin-bottom: 4px; }
   p { color: #667781; font-size: 14px; margin-top: 12px; }
-  pre {
+pre {
     background: #fff; color: #111;
     font-family: 'Consolas', 'Menlo', monospace;
     font-size: 8px; line-height: 8px;
+    white-space: pre;
     padding: 12px; border-radius: 8px;
     border: 1px solid #e0e0e0;
     display: inline-block; text-align: left; margin: 0;
@@ -81,7 +82,6 @@ app.get('/qr', (req, res) => {
   `);
 });
 
-// Server-Sent Events: empuja el QR (como data URL base64) o el estado "conectado" en tiempo real
 // SSE que empuja el QR como ASCII escaneable (único método de generación de QR en el proyecto)
 app.get('/qr-stream', (req, res) => {
   res.setHeader('Content-Type', 'text/event-stream');
@@ -89,8 +89,9 @@ app.get('/qr-stream', (req, res) => {
   res.setHeader('Connection', 'keep-alive');
   res.flushHeaders();
 
-  const enviarQr = async (qr) => {
-    const ascii = await QRCode.toString(qr, { type: 'terminal', small: true });
+  const enviarQr = (qr) => {
+    const ascii = generarAsciiLimpio(qr);
+    // Reemplaza saltos de línea reales por \n literal para viajar en una sola línea SSE, se reconstruyen en el navegador
     res.write(`event: qr\ndata: ${JSON.stringify(ascii)}\n\n`);
   };
 
@@ -142,6 +143,31 @@ app.get('/oauth/callback', async (req, res) => {
     res.status(500).send('Error al guardar tokens');
   }
 });
+
+// Genera el QR como texto ASCII puro (bloques Unicode), sin códigos ANSI de color
+function generarAsciiLimpio(qrData) {
+  const matriz = QRCode.create(qrData, { errorCorrectionLevel: 'M' }).modules;
+  const size = matriz.size;
+  const data = matriz.data;
+  let resultado = '';
+
+  // Recorre de a 2 filas por línea usando caracteres de medio bloque (▀▄█ ) para compactar el ASCII
+  for (let y = 0; y < size; y += 2) {
+    let linea = '';
+    for (let x = 0; x < size; x++) {
+      const arriba = data[y * size + x];
+      const abajo = (y + 1 < size) ? data[(y + 1) * size + x] : 0;
+
+      if (arriba && abajo) linea += '█';
+      else if (arriba && !abajo) linea += '▀';
+      else if (!arriba && abajo) linea += '▄';
+      else linea += ' ';
+    }
+    resultado += linea + '\n';
+  }
+
+  return resultado;
+}
 
 app.listen(3000, () => console.log('Servidor OAuth en http://localhost:3000'));
 
