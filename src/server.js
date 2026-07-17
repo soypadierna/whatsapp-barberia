@@ -68,7 +68,7 @@ app.get('/qr', (req, res) => {
       const badge = document.getElementById('countdown');
       countdownInterval = setInterval(() => {
         restante--;
-        if (badge) badge.textContent = restante > 0 ? `Expira en ${ restante }s` : 'Generando nuevo código...';
+        if (badge) badge.textContent = restante > 0 ? 'Expira en ' + restante + 's' : 'Generando nuevo código...';
         if (restante <= 0) clearInterval(countdownInterval);
       }, 1000);
     }
