@@ -89,7 +89,7 @@ app.get('/qr', (req, res) => {
   `);
 });
 
-// Página de diagnóstico: muestra el QR crudo como texto (igual que en consola), sin conversión a imagen
+// Página de diagnóstico: QR en ASCII estilo terminal (escaneable), sin tocar /qr
 app.get('/qr-raw', (req, res) => {
   res.setHeader('Cache-Control', 'no-store');
   res.send(`
@@ -97,15 +97,15 @@ app.get('/qr-raw', (req, res) => {
 <html lang="es">
 <head>
 <meta charset="UTF-8">
-<title>QR crudo (diagnóstico)</title>
+<title>QR ASCII (diagnóstico)</title>
 <style>
   body { background: #1e1e1e; color: #0f0; font-family: monospace; padding: 20px; }
-  pre { white-space: pre-wrap; word-break: break-all; font-size: 12px; }
+  pre { font-size: 8px; line-height: 8px; }
   .ok { color: #0ff; font-size: 18px; font-weight: bold; }
 </style>
 </head>
 <body>
-  <h3>QR crudo (string tal cual lo emite Baileys)</h3>
+  <h3>QR ASCII (estilo terminal)</h3>
   <div id="contenido"><pre>Esperando QR...</pre></div>
 
   <script>
@@ -113,7 +113,8 @@ app.get('/qr-raw', (req, res) => {
     const evtSource = new EventSource('/qr-raw-stream');
 
     evtSource.addEventListener('qr', (e) => {
-      contenido.innerHTML = '<pre>' + e.data + '</pre>';
+      const ascii = JSON.parse(e.data);
+      contenido.innerHTML = '<pre>' + ascii + '</pre>';
     });
 
     evtSource.addEventListener('conectado', () => {
@@ -134,8 +135,9 @@ app.get('/qr-raw-stream', (req, res) => {
   res.setHeader('Connection', 'keep-alive');
   res.flushHeaders();
 
-  const enviarQr = (qr) => {
-    res.write(`event: qr\ndata: ${qr}\n\n`);
+  const enviarQr = async (qr) => {
+    const ascii = await QRCode.toString(qr, { type: 'terminal', small: true });
+    res.write(`event: qr\ndata: ${JSON.stringify(ascii)}\n\n`);
   };
 
   const enviarConectado = () => {
@@ -156,6 +158,7 @@ app.get('/qr-raw-stream', (req, res) => {
     emisorQr.off('conectado', enviarConectado);
   });
 });
+
 // Genera el link de autorización para un barbero (uso manual una vez)
 app.get('/oauth/authorize', (req, res) => {
   const { barbero_id } = req.query;
