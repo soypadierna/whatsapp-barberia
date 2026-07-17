@@ -45,11 +45,15 @@ app.get('/qr', (req, res) => {
   }
   h2 { color: #075E54; margin-bottom: 4px; }
   p { color: #667781; font-size: 14px; margin-top: 12px; }
-pre {
+  pre {
     background: #fff; color: #111;
-    font-family: 'Consolas', 'Menlo', monospace;
+    font-family: 'Courier New', monospace;
     font-size: 8px; line-height: 8px;
+    letter-spacing: 0;
     white-space: pre;
+    font-smooth: never;
+    -webkit-font-smoothing: none;
+    image-rendering: pixelated;
     padding: 12px; border-radius: 8px;
     border: 1px solid #e0e0e0;
     display: inline-block; text-align: left; margin: 0;
