@@ -28,7 +28,7 @@ const tools = [
 ];
 
 async function detectarIntent(texto) {
-  const model = genAI.getGenerativeModel({ model: 'gemini-2.5-flash', tools });
+  const model = genAI.getGenerativeModel({ model: 'gemini-3-flash-preview', tools });
 
   const result = await model.generateContent(texto);
   const call = result.response.functionCalls()?.[0];
@@ -38,7 +38,7 @@ async function detectarIntent(texto) {
 
 // Redacta respuestas con tono de "vendedor amigable" que siempre empuja hacia agendar
 async function generarRespuestaNatural(contexto) {
-  const model = genAI.getGenerativeModel({ model: 'gemini-2.5-flash' });
+  const model = genAI.getGenerativeModel({ model: 'gemini-3-flash-preview' });
   const nombreBarberia = process.env.NOMBRE_BARBERIA || 'la barbería';
 
   const promptSistema = `Eres el asistente de WhatsApp de "${nombreBarberia}". Tu personalidad es amigable, profesional y cercana, pero NUNCA íntima.
@@ -83,7 +83,7 @@ async function extraerDatosCita(texto, contextoActual, catalogos) {
     },
   ];
 
-  const model = genAI.getGenerativeModel({ model: 'gemini-2.5-flash', tools: toolsExtraccion });
+  const model = genAI.getGenerativeModel({ model: 'gemini-3-flash-preview', tools: toolsExtraccion });
 
   const hoy = new Date().toISOString().split('T')[0];
   const prompt = `Fecha de hoy: ${hoy}.
