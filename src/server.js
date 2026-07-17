@@ -57,15 +57,29 @@ app.get('/qr', (req, res) => {
     </div>
   </div>
 
-  <script>
+<script>
     const contenido = document.getElementById('contenido');
     const evtSource = new EventSource('/qr-stream');
+    let countdownInterval;
+
+    function iniciarCountdown(segundos) {
+      clearInterval(countdownInterval);
+      let restante = segundos;
+      const badge = document.getElementById('countdown');
+      countdownInterval = setInterval(() => {
+        restante--;
+        if (badge) badge.textContent = restante > 0 ? `Expira en ${ restante }s` : 'Generando nuevo código...';
+        if (restante <= 0) clearInterval(countdownInterval);
+      }, 1000);
+    }
 
     evtSource.addEventListener('qr', (e) => {
-      contenido.innerHTML = '<img id="qr-img" src="' + e.data + '" /><p>Escanea con WhatsApp > Dispositivos vinculados</p>';
+      contenido.innerHTML = '<img id="qr-img" src="' + e.data + '" /><p>Escanea con WhatsApp > Dispositivos vinculados</p><p id="countdown" style="color:#128C7E;font-weight:bold;"></p>';
+      iniciarCountdown(20);
     });
 
     evtSource.addEventListener('conectado', () => {
+      clearInterval(countdownInterval);
       contenido.innerHTML = '<p class="ok">✅ Conectado correctamente</p>';
       evtSource.close();
     });

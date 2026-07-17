@@ -17,6 +17,7 @@ async function iniciarSesion(onMensaje) {
   sock = makeWASocket({
     auth: state,
     version,
+    qrTimeout: 20000, // fuerza regeneración de QR cada 20s (estándar de WhatsApp), evita códigos vencidos
     logger: pino({ level: 'silent' }),
   });
 
