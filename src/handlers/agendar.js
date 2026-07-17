@@ -1,156 +1,116 @@
-// Flujo conversacional de agendamiento paso a paso
+// Flujo conversacional de agendamiento por slots (no por pasos rígidos): Gemini extrae datos en cualquier orden
 const { supabase } = require('../db/client');
 const { crearEvento } = require('../calendar/sync');
 const { obtenerHorariosLibres } = require('../calendar/disponibilidad');
-const { generarRespuestaNatural, interpretarSeleccion } = require('../ai/gemini');
+const { estaDisponible } = require('../db/disponibilidad');
+const { generarRespuestaNatural, extraerDatosCita } = require('../ai/gemini');
 const { obtenerEstado, setEstado, limpiarEstado } = require('../core/estadoConversacion');
 
-
 module.exports = async function agendar({ texto, numero, sock }) {
-  const estado = obtenerEstado(numero);
+  const estadoPrevio = obtenerEstado(numero) || {};
 
-  // Paso 0: inicia el flujo, muestra servicios disponibles
-  if (!estado) {
-    const { data: servicios, error } = await supabase.from('servicios').select('*');
+  const { data: servicios } = await supabase.from('servicios').select('*');
+  const { data: barberos } = await supabase.from('barberos').select('*').eq('activo', true);
 
-    if (error) {
-      console.log('ERROR leyendo servicios:', error.message);
-    }
-
-    if (!servicios?.length) {
-      await sock.sendMessage(numero, { text: 'No hay servicios disponibles por ahora.' });
-      return;
-    }
-
-    const lista = servicios.map((s, i) => `${i + 1}. ${s.nombre} - $${s.precio}`).join('\n');
-    setEstado(numero, { paso: 'servicio', servicios });
-
-    await sock.sendMessage(numero, {
-      text: `¿Qué servicio te gustaría agendar?\n${lista}\n\nResponde con el número o el nombre.`,
-    });
+  if (!servicios?.length || !barberos?.length) {
+    await sock.sendMessage(numero, { text: 'No hay servicios o barberos configurados por ahora.' });
     return;
   }
 
-// Paso 1: elige servicio, muestra barberos disponibles
-  if (estado.paso === 'servicio') {
-    const servicio = await interpretarSeleccion(texto, estado.servicios);
+  // Extrae de este mensaje cualquier dato nuevo (servicio, barbero, fecha, hora), en cualquier orden/combinación
+  const extraido = await extraerDatosCita(texto, estadoPrevio, { servicios, barberos });
 
-    if (!servicio) {
-      await sock.sendMessage(numero, { text: 'No reconocí ese servicio. ¿Puedes escribirlo de nuevo o el número de la lista?' });
-      return;
-    }
+  // Combina lo ya sabido con lo nuevo (lo nuevo no vacío sobrescribe)
+  const datos = { ...estadoPrevio };
+  if (extraido.servicio) datos.servicioNombre = extraido.servicio;
+  if (extraido.barbero) datos.barberoNombre = extraido.barbero;
+  if (extraido.fecha) datos.fecha = extraido.fecha;
+  if (extraido.hora) datos.hora = extraido.hora;
 
-    const { data: barberos } = await supabase.from('barberos').select('*').eq('activo', true);
-    const lista = barberos.map((b, i) => `${i + 1}. ${b.nombre} (${b.horario_inicio} - ${b.horario_fin})`).join('\n');
+  // Resuelve el servicio y barbero contra el catálogo real (Gemini ya normalizó el nombre)
+  const servicio = datos.servicioNombre
+    ? servicios.find(s => s.nombre.toLowerCase() === datos.servicioNombre.toLowerCase())
+    : null;
+  const barbero = datos.barberoNombre
+    ? barberos.find(b => b.nombre.toLowerCase() === datos.barberoNombre.toLowerCase())
+    : null;
 
-    setEstado(numero, { paso: 'barbero', servicio, barberos });
-    await sock.sendMessage(numero, { text: `¿Con qué barbero prefieres?\n${lista}\n\nResponde con el número o el nombre.` });
-    return;
-  }
+  // Determina qué falta
+  const faltantes = [];
+  if (!servicio) faltantes.push('servicio');
+  if (!barbero) faltantes.push('barbero');
+  if (!datos.fecha) faltantes.push('fecha');
+  if (!datos.hora) faltantes.push('hora');
 
-// Paso 2: elige barbero, pide fecha
-  if (estado.paso === 'barbero') {
-    const barbero = await interpretarSeleccion(texto, estado.barberos);
+  if (faltantes.length > 0) {
+    setEstado(numero, datos);
 
-    if (!barbero) {
-      await sock.sendMessage(numero, { text: 'No reconocí ese barbero. ¿Puedes escribirlo de nuevo o el número de la lista?' });
-      return;
-    }
-
-    setEstado(numero, { ...estado, paso: 'fecha', barbero });
-    await sock.sendMessage(numero, { text: '¿Para qué fecha? (formato: YYYY-MM-DD, ej. 2026-07-20)' });
-    return;
-  }
-
-  // Paso 3: recibe fecha, muestra disponibilidad real en lenguaje natural
-  if (estado.paso === 'fecha') {
-    const fecha = texto.trim();
-    if (!/^\d{4}-\d{2}-\d{2}$/.test(fecha)) {
-      await sock.sendMessage(numero, { text: 'Formato inválido. Usa YYYY-MM-DD, ej. 2026-07-20' });
-      return;
-    }
-
-    const { barbero, servicio } = estado;
-    const libres = await obtenerHorariosLibres(barbero, fecha, servicio.duracion_min);
-
-    if (!libres.length) {
-      await sock.sendMessage(numero, { text: `${barbero.nombre} no tiene espacio ese día. ¿Probamos con otra fecha?` });
-      return; // se queda en el mismo paso para reintentar con otra fecha
-    }
-
-    const opciones = libres.slice(0, 3);
     const respuesta = await generarRespuestaNatural({
-      tipo: 'mostrar_disponibilidad',
-      barbero: barbero.nombre,
-      fecha,
-      opciones,
+      tipo: 'pedir_datos_faltantes',
+      faltantes,
+      datosYaConocidos: { servicio: servicio?.nombre, barbero: barbero?.nombre, fecha: datos.fecha, hora: datos.hora },
+      servicios: servicios.map(s => ({ nombre: s.nombre, precio: s.precio })),
+      barberos: barberos.map(b => b.nombre),
     });
 
-    setEstado(numero, { ...estado, paso: 'hora', fecha, opciones });
     await sock.sendMessage(numero, { text: respuesta });
     return;
   }
 
-  // Paso 4: recibe hora (libre, cualquier formato HH:MM), valida disponibilidad real antes de confirmar
-  if (estado.paso === 'hora') {
-    const { servicio, barbero, fecha } = estado;
-    const horaMatch = texto.match(/\d{1,2}:\d{2}/);
-    const hora = horaMatch ? horaMatch[0].padStart(5, '0') : null;
+  // Ya están los 4 datos: valida disponibilidad real antes de confirmar
+  const disponibilidad = await estaDisponible(barbero.id, datos.fecha, datos.hora);
 
-    if (!hora) {
-      await sock.sendMessage(numero, { text: 'No entendí la hora. Escríbela en formato HH:MM, ej. 15:00' });
-      return;
-    }
+  if (!disponibilidad.disponible) {
+    const libres = await obtenerHorariosLibres(barbero, datos.fecha, servicio.duracion_min);
 
-    const disponibilidad = await estaDisponible(barbero.id, fecha, hora);
+    // Descarta la hora inválida pero conserva el resto de los datos ya confirmados
+    setEstado(numero, { ...datos, hora: null });
 
-    if (!disponibilidad.disponible) {
-      const libres = await obtenerHorariosLibres(barbero, fecha, servicio.duracion_min);
-      const respuesta = await generarRespuestaNatural({
-        tipo: 'horario_no_disponible',
-        motivo: disponibilidad.motivo,
-        barbero: barbero.nombre,
-        alternativas: libres.slice(0, 3),
-      });
-      await sock.sendMessage(numero, { text: respuesta });
-      return; // se queda en el mismo paso para que elija otra hora
-    }
-
-    const { data, error } = await supabase
-      .from('citas')
-      .insert({
-        barbero_id: barbero.id,
-        cliente_telefono: numero,
-        servicio_id: servicio.id,
-        fecha,
-        hora,
-        estado: 'pendiente',
-      })
-      .select()
-      .single();
-
-    if (error) {
-      await sock.sendMessage(numero, { text: 'Ocurrió un error al agendar. Intenta de nuevo más tarde.' });
-      limpiarEstado(numero);
-      return;
-    }
-
-    await crearEvento({
-      citaId: data.id,
-      barberoId: barbero.id,
-      fecha, hora,
-      servicioNombre: servicio.nombre,
-      duracionMin: servicio.duracion_min,
-    });
-
-    limpiarEstado(numero);
-    const confirmacion = await generarRespuestaNatural({
-      tipo: 'confirmar_cita',
-      servicio: servicio.nombre,
+    const respuesta = await generarRespuestaNatural({
+      tipo: 'horario_no_disponible',
+      motivo: disponibilidad.motivo,
       barbero: barbero.nombre,
-      fecha, hora,
+      alternativas: libres.slice(0, 3),
     });
-    await sock.sendMessage(numero, { text: confirmacion });
+    await sock.sendMessage(numero, { text: respuesta });
     return;
   }
+
+  const { data, error } = await supabase
+    .from('citas')
+    .insert({
+      barbero_id: barbero.id,
+      cliente_telefono: numero,
+      servicio_id: servicio.id,
+      fecha: datos.fecha,
+      hora: datos.hora,
+      estado: 'pendiente',
+    })
+    .select()
+    .single();
+
+  if (error) {
+    await sock.sendMessage(numero, { text: 'Ocurrió un error al agendar. Intenta de nuevo más tarde.' });
+    limpiarEstado(numero);
+    return;
+  }
+
+  await crearEvento({
+    citaId: data.id,
+    barberoId: barbero.id,
+    fecha: datos.fecha,
+    hora: datos.hora,
+    servicioNombre: servicio.nombre,
+    duracionMin: servicio.duracion_min,
+  });
+
+  limpiarEstado(numero);
+  const confirmacion = await generarRespuestaNatural({
+    tipo: 'confirmar_cita',
+    servicio: servicio.nombre,
+    barbero: barbero.nombre,
+    fecha: datos.fecha,
+    hora: datos.hora,
+  });
+  await sock.sendMessage(numero, { text: confirmacion });
 };
