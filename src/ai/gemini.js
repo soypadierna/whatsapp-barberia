@@ -60,7 +60,3 @@ Responde SOLO con el mensaje final para el cliente, sin explicaciones ni comilla
 }
 
 module.exports = { detectarIntent, generarRespuestaNatural };
-
-module.exports = { detectarIntent, generarRespuestaNatural };
-
-module.exports = { detectarIntent };
