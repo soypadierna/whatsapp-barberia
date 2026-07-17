@@ -1,5 +1,6 @@
 // Muestra horarios de barberos activos
 const { supabase } = require('../db/client');
+const { generarRespuestaNatural } = require('../ai/gemini');
 
 module.exports = async function horarios({ numero, sock }) {
   const { data, error } = await supabase.from('barberos').select('*').eq('activo', true);
@@ -9,6 +10,9 @@ module.exports = async function horarios({ numero, sock }) {
     return;
   }
 
-  const lista = data.map(b => `• ${b.nombre}: ${b.horario_inicio} - ${b.horario_fin}`).join('\n');
-  await sock.sendMessage(numero, { text: `Horarios de atención:\n${lista}` });
+  const respuesta = await generarRespuestaNatural({
+    tipo: 'mostrar_horarios',
+    barberos: data.map(b => ({ nombre: b.nombre, inicio: b.horario_inicio, fin: b.horario_fin })),
+  });
+  await sock.sendMessage(numero, { text: respuesta });
 };

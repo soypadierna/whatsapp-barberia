@@ -36,15 +36,30 @@ async function detectarIntent(texto) {
   return call ? call.name : null;
 }
 
-// Redacta una respuesta natural a partir de contexto estructurado (no detecta intent, solo redacta)
+// Redacta respuestas con tono de "vendedor amigable" que siempre empuja hacia agendar
 async function generarRespuestaNatural(contexto) {
   const model = genAI.getGenerativeModel({ model: 'gemini-3.5-flash' });
+  const nombreBarberia = process.env.NOMBRE_BARBERIA || 'la barbería';
 
-  const prompt = `Eres el asistente de WhatsApp de una barbería. Redacta una respuesta breve, cálida y natural en español (máx 3 líneas, sin emojis excesivos) para esta situación:\n${JSON.stringify(contexto)}\n\nSolo responde con el mensaje final, sin explicaciones.`;
+  const promptSistema = `Eres el asistente de WhatsApp de "${nombreBarberia}". Tu personalidad es cálida, cercana y ligeramente entusiasta, como un buen vendedor que genuinamente quiere ayudar (nunca agresivo ni insistente).
 
-  const result = await model.generateContent(prompt);
+Reglas de tono:
+- Español natural, frases cortas, máximo 1 emoji por mensaje (moderado, no saturar).
+- Nunca sonar como menú o formulario. Nunca listar opciones con guiones o números salvo que el contexto lo pida explícitamente (ej. mostrar servicios).
+- Cada respuesta debe cerrar empujando amablemente hacia el siguiente paso natural de la conversación (idealmente hacia agendar una cita), sin sonar forzado.
+- Si el contexto es un saludo inicial, da la bienvenida y ofrece agendar/precios/horarios en una sola frase fluida.
+- Si el contexto es mostrar disponibilidad, sugiere las opciones de forma natural y pregunta cuál prefiere.
+- Si el contexto es una confirmación, celebra brevemente y confirma los datos clave.
+
+Contexto de la situación actual: ${JSON.stringify(contexto)}
+
+Responde SOLO con el mensaje final para el cliente, sin explicaciones ni comillas.`;
+
+  const result = await model.generateContent(promptSistema);
   return result.response.text().trim();
 }
+
+module.exports = { detectarIntent, generarRespuestaNatural };
 
 module.exports = { detectarIntent, generarRespuestaNatural };
 

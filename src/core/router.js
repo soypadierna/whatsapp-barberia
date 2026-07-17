@@ -7,7 +7,7 @@ const handlers = {
   admin: require('../handlers/admin'),
 };
 
-const { detectarIntent } = require('../ai/gemini');
+const { detectarIntent, generarRespuestaNatural } = require('../ai/gemini');
 const { obtenerEstado } = require('./estadoConversacion');
 const logger = require('../utils/logger');
 
@@ -25,9 +25,11 @@ async function enrutarMensaje({ texto, numero, sock }) {
     logger.mensaje(`Intent detectado para ${logger.enmascararNumero(numero)}: ${intent || 'ninguno'}`);
 
     if (!intent || !handlers[intent]) {
-      await sock.sendMessage(numero, {
-        text: 'No entendí tu mensaje. Puedes preguntarme por: agendar, cancelar, horarios o precios.',
+      const respuesta = await generarRespuestaNatural({
+        tipo: 'saludo_o_no_claro',
+        mensajeUsuario: texto,
       });
+      await sock.sendMessage(numero, { text: respuesta });
       return;
     }
 
