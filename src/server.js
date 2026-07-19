@@ -1,9 +1,7 @@
 // Servidor Express para OAuth callback y auth inicial por barbero
 const express = require('express');
 const { generarUrlAuth, guardarTokens } = require('./calendar/oauth');
-const { obtenerQrActual, estaConectado, emisorQr } = require('./core/session');
-const { solicitarPairingCode } = require('./core/session');
-const { obtenerQrActual, estaConectado, emisorQr } = require('./core/session');
+const { obtenerQrActual, estaConectado, emisorQr, solicitarPairingCode } = require('./core/session');
 
 const path = require('path');
 const QRCode = require('qrcode');
