@@ -1,0 +1,67 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<title>Vincular WhatsApp</title>
+<style>
+  body {
+    background: #f0f2f5;
+    font-family: -apple-system, Segoe UI, Roboto, sans-serif;
+    display: flex; justify-content: center; align-items: center;
+    height: 100vh; margin: 0;
+  }
+  .card {
+    background: white; border-radius: 12px; padding: 30px;
+    box-shadow: 0 2px 10px rgba(0,0,0,0.1); text-align: center;
+  }
+  h2 { color: #075E54; margin-bottom: 4px; }
+  p { color: #667781; font-size: 14px; margin-top: 12px; }
+  pre {
+    background: #fff; color: #111;
+    font-family: 'Courier New', monospace;
+    font-size: 8px; line-height: 8px;
+    letter-spacing: 0;
+    white-space: pre;
+    font-smooth: never;
+    -webkit-font-smoothing: none;
+    image-rendering: pixelated;
+    padding: 12px; border-radius: 8px;
+    border: 1px solid #e0e0e0;
+    display: inline-block; text-align: left; margin: 0;
+  }
+  .ok { color: #128C7E; font-size: 18px; font-weight: bold; }
+  .banner-alerta {
+    background: #ffebee; color: #c62828; border: 1px solid #ef5350;
+    border-radius: 8px; padding: 10px; margin-bottom: 12px; font-size: 13px; text-align: left;
+  }
+</style>
+</head>
+<body>
+  <div class="card">
+    <h2>WhatsApp Barbería</h2>
+    <div id="alerta"></div>
+    <div id="contenido"><p>Esperando código QR...</p></div>
+  </div>
+
+  <script>
+    const contenido = document.getElementById('contenido');
+    const alertaDiv = document.getElementById('alerta');
+    const evtSource = new EventSource('/qr-stream');
+
+    evtSource.addEventListener('qr', (e) => {
+      const ascii = JSON.parse(e.data);
+      contenido.innerHTML = '<pre>' + ascii + '</pre><p>Escanea con WhatsApp > Dispositivos vinculados</p>';
+    });
+
+    evtSource.addEventListener('conectado', () => {
+      contenido.innerHTML = '<p class="ok">✅ Conectado correctamente</p>';
+      evtSource.close();
+    });
+
+    evtSource.addEventListener('alerta', (e) => {
+      const info = JSON.parse(e.data);
+      alertaDiv.innerHTML = '<div class="banner-alerta">⚠️ Se detectó un número distinto al vinculado anteriormente<br>Anterior: ' + info.anterior + '<br>Nuevo: ' + info.nuevo + '</div>';
+    });
+  </script>
+</body>
+</html>

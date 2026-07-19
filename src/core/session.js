@@ -2,7 +2,7 @@
 const { default: makeWASocket, DisconnectReason, fetchLatestBaileysVersion } = require('@whiskeysockets/baileys');
 const pino = require('pino');
 const { EventEmitter } = require('events');
-const { useSupabaseAuthState, limpiarSesionCompleta } = require('../db/authState');
+const { useSupabaseAuthState, limpiarSesionCompleta, guardarNumeroVinculado, leerNumeroVinculado } = require('../db/authState');
 const logger = require('../utils/logger');
 
 let sock;
@@ -21,7 +21,23 @@ async function iniciarSesion(onMensaje) {
     logger: pino({ level: 'silent' }),
   });
 
-  sock.ev.on('creds.update', saveCreds);
+  sock.ev.on('creds.update', async () => {
+    await saveCreds();
+
+    const numeroActual = sock.authState?.creds?.me?.id;
+    if (!numeroActual) return;
+
+    const numeroGuardado = await leerNumeroVinculado();
+
+    if (numeroGuardado && numeroGuardado !== numeroActual) {
+      // Comparación exacta de string, sin normalización, para evitar falsos positivos/negativos
+      logger.sesion(`⚠️ Número distinto al guardado — anterior: ${numeroGuardado}, nuevo: ${numeroActual}`);
+      emisorQr.emit('alerta_numero_distinto', { anterior: numeroGuardado, nuevo: numeroActual });
+    }
+
+    await guardarNumeroVinculado(numeroActual);
+  });
+
 
   sock.ev.on('connection.update', async (update) => {
     const { connection, lastDisconnect, qr } = update;

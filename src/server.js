@@ -3,7 +3,9 @@ const express = require('express');
 const { generarUrlAuth, guardarTokens } = require('./calendar/oauth');
 const { obtenerQrActual, estaConectado, emisorQr } = require('./core/session');
 const { solicitarPairingCode } = require('./core/session');
+const { obtenerQrActual, estaConectado, emisorQr } = require('./core/session');
 
+const path = require('path');
 const QRCode = require('qrcode');
 const app = express();
 
@@ -23,70 +25,12 @@ app.get('/pair', async (req, res) => {
   }
 });
 
-// Página definitiva: QR en ASCII (método confirmado que funciona), con diseño limpio tipo WhatsApp Web
+// Sirve la vista de /qr desde archivo estático, separando presentación de lógica
 app.get('/qr', (req, res) => {
   res.setHeader('Cache-Control', 'no-store');
-  res.send(`
-<!DOCTYPE html>
-<html lang="es">
-<head>
-<meta charset="UTF-8">
-<title>Vincular WhatsApp</title>
-<style>
-  body {
-    background: #f0f2f5;
-    font-family: -apple-system, Segoe UI, Roboto, sans-serif;
-    display: flex; justify-content: center; align-items: center;
-    height: 100vh; margin: 0;
-  }
-  .card {
-    background: white; border-radius: 12px; padding: 30px;
-    box-shadow: 0 2px 10px rgba(0,0,0,0.1); text-align: center;
-  }
-  h2 { color: #075E54; margin-bottom: 4px; }
-  p { color: #667781; font-size: 14px; margin-top: 12px; }
-  pre {
-    background: #fff; color: #111;
-    font-family: 'Courier New', monospace;
-    font-size: 8px; line-height: 8px;
-    letter-spacing: 0;
-    white-space: pre;
-    font-smooth: never;
-    -webkit-font-smoothing: none;
-    image-rendering: pixelated;
-    padding: 12px; border-radius: 8px;
-    border: 1px solid #e0e0e0;
-    display: inline-block; text-align: left; margin: 0;
-  }
-  .ok { color: #128C7E; font-size: 18px; font-weight: bold; }
-</style>
-</head>
-<body>
-  <div class="card">
-    <h2>WhatsApp Barbería</h2>
-    <div id="contenido"><p>Esperando código QR...</p></div>
-  </div>
-
-  <script>
-    const contenido = document.getElementById('contenido');
-    const evtSource = new EventSource('/qr-stream');
-
-    evtSource.addEventListener('qr', (e) => {
-      const ascii = JSON.parse(e.data);
-      contenido.innerHTML = '<pre>' + ascii + '</pre><p>Escanea con WhatsApp > Dispositivos vinculados</p>';
-    });
-
-    evtSource.addEventListener('conectado', () => {
-      contenido.innerHTML = '<p class="ok">✅ Conectado correctamente</p>';
-      evtSource.close();
-    });
-  </script>
-</body>
-</html>
-  `);
+  res.sendFile(path.join(__dirname, 'views', 'qr.html'));
 });
 
-// SSE que empuja el QR como ASCII escaneable (único método de generación de QR en el proyecto)
 app.get('/qr-stream', (req, res) => {
   res.setHeader('Content-Type', 'text/event-stream');
   res.setHeader('Cache-Control', 'no-store');
@@ -95,12 +39,15 @@ app.get('/qr-stream', (req, res) => {
 
   const enviarQr = (qr) => {
     const ascii = generarAsciiLimpio(qr);
-    // Reemplaza saltos de línea reales por \n literal para viajar en una sola línea SSE, se reconstruyen en el navegador
     res.write(`event: qr\ndata: ${JSON.stringify(ascii)}\n\n`);
   };
 
   const enviarConectado = () => {
     res.write(`event: conectado\ndata: ok\n\n`);
+  };
+
+  const enviarAlerta = (info) => {
+    res.write(`event: alerta\ndata: ${JSON.stringify(info)}\n\n`);
   };
 
   if (estaConectado()) {
@@ -111,10 +58,12 @@ app.get('/qr-stream', (req, res) => {
 
   emisorQr.on('qr', enviarQr);
   emisorQr.on('conectado', enviarConectado);
+  emisorQr.on('alerta_numero_distinto', enviarAlerta);
 
   req.on('close', () => {
     emisorQr.off('qr', enviarQr);
     emisorQr.off('conectado', enviarConectado);
+    emisorQr.off('alerta_numero_distinto', enviarAlerta);
   });
 });
 

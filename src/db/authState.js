@@ -68,4 +68,24 @@ async function limpiarSesionCompleta() {
   else console.log('🧹 Sesión de Supabase limpiada por logout detectado');
 }
 
-module.exports = { useSupabaseAuthState, limpiarSesionCompleta };
+// Guarda/lee el número de WhatsApp vinculado actualmente, para detectar cambios de número
+async function guardarNumeroVinculado(numero) {
+  const { error } = await supabase.from('auth_sessions').upsert({
+    id: 'numero_vinculado',
+    data: { numero },
+    updated_at: new Date().toISOString(),
+  });
+  if (error) logger.error('Fallo guardando numero_vinculado', error.message);
+}
+
+async function leerNumeroVinculado() {
+  const { data, error } = await supabase
+    .from('auth_sessions').select('data').eq('id', 'numero_vinculado').maybeSingle();
+  if (error) {
+    logger.error('Fallo leyendo numero_vinculado', error.message);
+    return null;
+  }
+  return data?.data?.numero || null;
+}
+
+module.exports = { useSupabaseAuthState, limpiarSesionCompleta, guardarNumeroVinculado, leerNumeroVinculado };
