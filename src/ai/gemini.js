@@ -5,20 +5,30 @@ const logger = require('../utils/logger');
 
 const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
 
-// Wrapper genérico con retry ante error 429 (rate limit), usando el retryDelay que indica la API
+// Wrapper genérico con retry ante errores temporales (429 rate limit, 503 service unavailable)
 async function llamarConRetry(fn) {
-  try {
-    return await fn();
-  } catch (err) {
-    const es429 = err.status === 429 || err.message?.includes('429');
-    if (!es429) throw err;
+  const backoffs = [2000, 5000, 10000]; // 2s, 5s, 10s
 
-    const delayInfo = err.errorDetails?.find(d => d['@type']?.includes('RetryInfo'));
-    const segundos = delayInfo?.retryDelay ? parseInt(delayInfo.retryDelay) : 5;
-    logger.error(`Rate limit de Gemini (429), reintentando en ${segundos}s`);
+  for (let intento = 0; intento <= backoffs.length; intento++) {
+    try {
+      return await fn();
+    } catch (err) {
+      const es429 = err.status === 429 || err.message?.includes('429');
+      const es503 = err.status === 503 || err.message?.includes('503') || err.message?.includes('Service Unavailable');
 
-    await new Promise(r => setTimeout(r, segundos * 1000));
-    return await fn(); // un solo reintento
+      if (!es429 && !es503) throw err;
+      if (intento === backoffs.length) throw err; // se acabaron los reintentos
+
+      let esperaMs = backoffs[intento];
+
+      if (es429) {
+        const delayInfo = err.errorDetails?.find(d => d['@type']?.includes('RetryInfo'));
+        if (delayInfo?.retryDelay) esperaMs = parseInt(delayInfo.retryDelay) * 1000;
+      }
+
+      logger.error(`Error temporal de Gemini (${es429 ? '429' : '503'}), reintento ${intento + 1}/${backoffs.length} en ${esperaMs / 1000}s`);
+      await new Promise(r => setTimeout(r, esperaMs));
+    }
   }
 }
 

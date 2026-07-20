@@ -38,7 +38,6 @@ async function iniciarSesion(onMensaje) {
     await guardarNumeroVinculado(numeroActual);
   });
 
-
   sock.ev.on('connection.update', async (update) => {
     const { connection, lastDisconnect, qr } = update;
 
@@ -77,6 +76,27 @@ async function iniciarSesion(onMensaje) {
       conectado = true;
       logger.conexion('✅ Conectado a WhatsApp');
       emisorQr.emit('conectado');
+    }
+  });
+
+  sock.ev.on('messages.upsert', async ({ messages }) => {
+    try {
+      const msg = messages[0];
+      const numero = msg.key.remoteJid;
+
+      // Filtra mensajes que no son de un cliente real: status/broadcast, grupos, o sin contenido
+      if (!msg.message || msg.key.fromMe) return;
+      if (numero === 'status@broadcast') return;
+      if (numero?.endsWith('@g.us')) return; // grupos, no soportados por ahora
+
+      const texto = msg.message.conversation || msg.message.extendedTextMessage?.text || '';
+      if (!texto.trim()) return; // contenido vacío (stickers, reacciones, etc.)
+
+      logger.mensaje(`Recibido de ${logger.enmascararNumero(numero)}: "${texto.slice(0, 50)}"`);
+
+      if (onMensaje) await onMensaje({ texto, numero, sock });
+    } catch (err) {
+      logger.error('Error no capturado procesando mensaje', err.stack);
     }
   });
 
