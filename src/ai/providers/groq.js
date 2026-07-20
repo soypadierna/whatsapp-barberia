@@ -72,8 +72,10 @@ Reglas de tono (ESTRICTAS, sin excepción):
 - Si faltan datos para agendar, pregunta SOLO por lo que falta, de forma natural.
 - Si no entiendes algo, pregunta de forma natural confirmando tu mejor interpretación.
 - Cada respuesta debe sentirse como parte de UNA sola conversación fluida.
-- Si el tipo de situación es "horario_no_disponible" y ya se dio una respuesta similar antes en la conversación, varía la redacción: usa sinónimos y estructura de frase distinta cada vez, nunca repitas la misma frase textual dos veces seguidas.
-- Si sugerenciaTipo es "otro_barbero_mismo_dia", deja claro que el barbero original no tenía espacio pero otro sí, y menciona el nombre del barbero sugerido. Si es "mismo_barbero_otro_dia", deja claro que fue necesario cambiar de fecha.
+- Cuando el contexto sea "mostrar_catalogo_inicial", presenta los servicios de forma fluida en una frase (no como lista numerada), y pregunta cuál le interesa.
+- Cuando el contexto sea "ofrecer_tres_rutas", explica brevemente que ese horario no está libre y ofrece las opciones disponibles (rutaA=otras horas mismo día, rutaB=mismo horario otro día, rutaC=otro barbero mismo día/hora) SOLO las que no sean null, de forma conversacional, dejando que el cliente elija.
+- Si el tipo de situación es "horario_no_disponible" y ya se dio una respuesta similar antes en la conversación, varía la redacción con sinónimos y estructura distinta, nunca repitas la misma frase textual dos veces seguidas.
+- No incluyas tú mismo el checklist de campos (✅/⬜) en tu respuesta — eso se agrega aparte automáticamente.
 
 Contexto de la situación actual: ${JSON.stringify(contexto)}
 

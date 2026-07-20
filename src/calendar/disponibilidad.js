@@ -128,4 +128,38 @@ async function estaDisponible(barberoId, fecha, hora) {
   return { disponible: true };
 }
 
-module.exports = { obtenerHorariosLibres, sugerirAlternativasAmplias, estaDisponible };
+// Ruta A: otras horas del mismo barbero, mismo día
+async function otrasHorasMismoDia(barbero, fecha, duracionMin) {
+  return obtenerHorariosLibres(barbero, fecha, duracionMin);
+}
+
+// Ruta B: mismo barbero, misma hora deseada, buscando en los próximos N días
+async function otroDiaMismaHora(barbero, horaDeseada, duracionMin, diasAdelante = 7) {
+  const hoy = new Date();
+  for (let i = 1; i <= diasAdelante; i++) {
+    const fecha = new Date(hoy);
+    fecha.setDate(fecha.getDate() + i);
+    const fechaStr = fecha.toISOString().split('T')[0];
+    const libres = await obtenerHorariosLibres(barbero, fechaStr, duracionMin);
+    if (libres.includes(horaDeseada)) {
+      return { fecha: fechaStr, hora: horaDeseada };
+    }
+  }
+  return null;
+}
+
+// Ruta C: mismo día, misma hora deseada, con otro barbero disponible
+async function otroBarberoMismaFechaHora(barberosTodos, barberoExcluidoId, fecha, horaDeseada, duracionMin) {
+  for (const otro of barberosTodos.filter(b => b.id !== barberoExcluidoId)) {
+    const libres = await obtenerHorariosLibres(otro, fecha, duracionMin);
+    if (libres.includes(horaDeseada)) {
+      return { barbero: otro };
+    }
+  }
+  return null;
+}
+
+module.exports = {
+  obtenerHorariosLibres, sugerirAlternativasAmplias, estaDisponible,
+  otrasHorasMismoDia, otroDiaMismaHora, otroBarberoMismaFechaHora,
+};
