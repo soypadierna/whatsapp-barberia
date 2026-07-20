@@ -89,4 +89,43 @@ async function sugerirAlternativasAmplias({ barbero, barberosTodos, fecha, hora,
   return { tipo: 'sin_opciones' };
 }
 
-module.exports = { obtenerHorariosLibres, sugerirAlternativasAmplias };
+// Verifica si un barbero está disponible en una fecha/hora específica (horario, choque en Supabase, choque en Calendar)
+async function estaDisponible(barberoId, fecha, hora) {
+  const { data: barbero } = await supabase
+    .from('barberos').select('*').eq('id', barberoId).single();
+
+  if (!barbero) return { disponible: false, motivo: 'Barbero no existe' };
+
+  if (hora < barbero.horario_inicio || hora >= barbero.horario_fin) {
+    return { disponible: false, motivo: 'Fuera de horario de atención' };
+  }
+
+  const { data: ocupado } = await supabase
+    .from('citas')
+    .select('id')
+    .eq('barbero_id', barberoId)
+    .eq('fecha', fecha)
+    .eq('hora', hora)
+    .eq('estado', 'pendiente')
+    .maybeSingle();
+
+  if (ocupado) return { disponible: false, motivo: 'Horario ya ocupado' };
+
+  const auth = await obtenerClienteBarbero(barberoId);
+  if (auth) {
+    const calendar = google.calendar({ version: 'v3', auth });
+    const inicio = new Date(`${fecha}T${hora}:00`);
+    const fin = new Date(inicio.getTime() + 30 * 60000); // ventana mínima de 30 min para chequear choque
+
+    const res = await calendar.freebusy.query({
+      requestBody: { timeMin: inicio.toISOString(), timeMax: fin.toISOString(), items: [{ id: 'primary' }] },
+    });
+
+    const busy = res.data.calendars.primary.busy || [];
+    if (busy.length > 0) return { disponible: false, motivo: 'Ocupado en Google Calendar' };
+  }
+
+  return { disponible: true };
+}
+
+module.exports = { obtenerHorariosLibres, sugerirAlternativasAmplias, estaDisponible };

@@ -1,7 +1,6 @@
 const { supabase } = require('../db/client');
 const { crearEvento } = require('../calendar/sync');
-const { obtenerHorariosLibres, sugerirAlternativasAmplias } = require('../calendar/disponibilidad');
-const { estaDisponible } = require('../db/disponibilidad');
+const { obtenerHorariosLibres, sugerirAlternativasAmplias, estaDisponible } = require('../calendar/disponibilidad');
 const { generarRespuestaNatural, extraerDatosCita } = require('../ai/provider');
 const { obtenerEstado, setEstado, limpiarEstado } = require('../core/estadoConversacion');
 const logger = require('../utils/logger');
