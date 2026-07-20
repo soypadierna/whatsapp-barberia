@@ -1,6 +1,6 @@
 // Muestra lista de servicios y precios
 const { supabase } = require('../db/client');
-const { generarRespuestaNatural } = require('../ai/providers/provider');
+const { generarRespuestaNatural } = require('src/ai/provider.js');
 
 module.exports = async function precios({ numero, sock }) {
   const { data, error } = await supabase.from('servicios').select('*');
