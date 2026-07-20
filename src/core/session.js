@@ -100,21 +100,6 @@ async function iniciarSesion(onMensaje) {
     }
   });
 
-  sock.ev.on('messages.upsert', async ({ messages }) => {
-    try {
-      const msg = messages[0];
-      if (!msg.message || msg.key.fromMe) return;
-      const texto = msg.message.conversation || msg.message.extendedTextMessage?.text || '';
-      const numero = msg.key.remoteJid;
-
-      logger.mensaje(`Recibido de ${logger.enmascararNumero(numero)}: "${texto.slice(0, 50)}"`);
-
-      if (onMensaje) await onMensaje({ texto, numero, sock });
-    } catch (err) {
-      logger.error('Error no capturado procesando mensaje', err.stack);
-    }
-  });
-
   return sock;
 }
 
