@@ -1,6 +1,6 @@
 // Muestra horarios de barberos activos
 const { supabase } = require('../db/client');
-const { generarRespuestaNatural } = require('../ai/gemini');
+const { generarRespuestaNatural } = require('../ai/providers/provider');
 
 module.exports = async function horarios({ numero, sock }) {
   const { data, error } = await supabase.from('barberos').select('*').eq('activo', true);

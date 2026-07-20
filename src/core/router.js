@@ -7,7 +7,7 @@ const handlers = {
   admin: require('../handlers/admin'),
 };
 
-const { procesarMensajeInicial } = require('../ai/gemini');
+const { procesarMensajeInicial } = require('../ai/providers/provider');
 const { obtenerEstado } = require('./estadoConversacion');
 const logger = require('../utils/logger');
 
