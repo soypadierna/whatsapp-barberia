@@ -72,6 +72,8 @@ Reglas de tono (ESTRICTAS, sin excepción):
 - Si faltan datos para agendar, pregunta SOLO por lo que falta, de forma natural.
 - Si no entiendes algo, pregunta de forma natural confirmando tu mejor interpretación.
 - Cada respuesta debe sentirse como parte de UNA sola conversación fluida.
+- Si el tipo de situación es "horario_no_disponible" y ya se dio una respuesta similar antes en la conversación, varía la redacción: usa sinónimos y estructura de frase distinta cada vez, nunca repitas la misma frase textual dos veces seguidas.
+- Si sugerenciaTipo es "otro_barbero_mismo_dia", deja claro que el barbero original no tenía espacio pero otro sí, y menciona el nombre del barbero sugerido. Si es "mismo_barbero_otro_dia", deja claro que fue necesario cambiar de fecha.
 
 Contexto de la situación actual: ${JSON.stringify(contexto)}
 
@@ -91,15 +93,14 @@ async function extraerDatosCita(texto, contextoActual, catalogos) {
   const hoy = new Date().toISOString().split('T')[0];
 
   const prompt = `Fecha de hoy: ${hoy}.
-Catálogo de servicios disponibles: ${catalogos.servicios.map(s => s.nombre).join(', ')}.
-Barberos disponibles: ${catalogos.barberos.map(b => b.nombre).join(', ')}.
-Datos ya conocidos de esta conversación: ${JSON.stringify(contextoActual)}.
-Mensaje nuevo del cliente: "${texto}"
+Catálogo de servicios: ${catalogos.servicios.map(s => s.nombre).join(', ')}.
+Barberos: ${catalogos.barberos.map(b => b.nombre).join(', ')}.
+Datos YA confirmados en turnos anteriores (NO los repitas ni los reescribas): ${JSON.stringify(contextoActual)}.
+Mensaje NUEVO del cliente (analiza SOLO este mensaje): "${texto}"
 
-Extrae los datos que el cliente menciona en este mensaje (puede mencionar uno, varios, o ninguno). Si menciona un servicio o barbero con errores de tipeo, corrígelo al nombre exacto del catálogo. Interpreta fechas relativas ("hoy", "mañana", días de la semana) contra la fecha de hoy.
+REGLA CRÍTICA: solo llena un campo si el cliente lo menciona explícitamente EN ESTE mensaje puntual. Si el cliente solo dice una hora, NO asumas ni inventes una fecha — deja "fecha": null aunque haya una fecha ya conocida de antes.
 
-Responde SOLO con un JSON válido, sin texto adicional, con este formato exacto:
-{"servicio": "nombre o null", "barbero": "nombre o null", "fecha": "YYYY-MM-DD o null", "hora": "HH:MM o null"}`;
+Responde SOLO con JSON: {"servicio": "nombre o null", "barbero": "nombre o null", "fecha": "YYYY-MM-DD o null", "hora": "HH:MM o null"}`;
 
   const result = await llamarConRetry(() =>
     groq.chat.completions.create({
@@ -110,10 +111,7 @@ Responde SOLO con un JSON válido, sin texto adicional, con este formato exacto:
   );
 
   const data = extraerJson(result.choices[0].message.content);
-
-  // Normaliza "null" (string) a null real, por si el modelo lo devuelve como texto
   Object.keys(data).forEach(k => { if (data[k] === 'null') data[k] = null; });
-
   return data;
 }
 

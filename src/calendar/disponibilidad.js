@@ -58,4 +58,35 @@ async function obtenerHorariosLibres(barbero, fecha, duracionMin) {
   return slots.filter(s => !ocupadasSupabase.has(s) && !ocupadasCalendar.has(s));
 }
 
-module.exports = { obtenerHorariosLibres };
+// Sugiere alternativas en cascada: (a) mismo barbero mismo día, (b) otros barberos mismo día/hora, (c) mismo barbero otro día cercano
+async function sugerirAlternativasAmplias({ barbero, barberosTodos, fecha, hora, duracionMin }) {
+  // (a) Mismo barbero, mismo día, otras horas
+  const libresMismoDia = await obtenerHorariosLibres(barbero, fecha, duracionMin);
+  if (libresMismoDia.length > 0) {
+    return { tipo: 'mismo_barbero_mismo_dia', barbero: barbero.nombre, fecha, opciones: libresMismoDia.slice(0, 3) };
+  }
+
+  // (b) Otros barberos, mismo día, cerca de la hora pedida
+  for (const otro of barberosTodos.filter(b => b.id !== barbero.id)) {
+    const libresOtro = await obtenerHorariosLibres(otro, fecha, duracionMin);
+    if (libresOtro.length > 0) {
+      return { tipo: 'otro_barbero_mismo_dia', barbero: otro.nombre, fecha, opciones: libresOtro.slice(0, 3) };
+    }
+  }
+
+  // (c) Mismo barbero, próximos días (hasta 5 días adelante)
+  const fechaBase = new Date(fecha + 'T00:00:00');
+  for (let i = 1; i <= 5; i++) {
+    const siguiente = new Date(fechaBase);
+    siguiente.setDate(siguiente.getDate() + i);
+    const fechaStr = siguiente.toISOString().split('T')[0];
+    const libres = await obtenerHorariosLibres(barbero, fechaStr, duracionMin);
+    if (libres.length > 0) {
+      return { tipo: 'mismo_barbero_otro_dia', barbero: barbero.nombre, fecha: fechaStr, opciones: libres.slice(0, 3) };
+    }
+  }
+
+  return { tipo: 'sin_opciones' };
+}
+
+module.exports = { obtenerHorariosLibres, sugerirAlternativasAmplias };
