@@ -1,4 +1,4 @@
-// Implementación del proveedor Gemini (mismo contrato que src/ai/provider.js espera)
+// Implementación del proveedor Gemini (mismo contrato que ../ai/provider espera)
 const { GoogleGenerativeAI } = require('@google/generative-ai');
 require('dotenv').config();
 const logger = require('../../utils/logger');

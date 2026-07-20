@@ -3,7 +3,7 @@ const { supabase } = require('../db/client');
 const { crearEvento } = require('../calendar/sync');
 const { obtenerHorariosLibres } = require('../calendar/disponibilidad');
 const { estaDisponible } = require('../db/disponibilidad');
-const { generarRespuestaNatural, extraerDatosCita } = require('src/ai/provider.js');
+const { generarRespuestaNatural, extraerDatosCita } = require('../ai/provider');
 const { obtenerEstado, setEstado, limpiarEstado } = require('../core/estadoConversacion');
 
 module.exports = async function agendar({ texto, numero, sock }) {

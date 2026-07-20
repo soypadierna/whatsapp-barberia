@@ -1,4 +1,4 @@
-// Implementación del proveedor Groq (mismo contrato que src/ai/provider.js espera)
+// Implementación del proveedor Groq (mismo contrato que ../ai/provider espera)
 const Groq = require('groq-sdk');
 require('dotenv').config();
 const logger = require('../../utils/logger');
