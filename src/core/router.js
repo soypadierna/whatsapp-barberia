@@ -7,7 +7,7 @@ const handlers = {
   admin: require('../handlers/admin'),
 };
 
-const { detectarIntent, generarRespuestaNatural } = require('../ai/gemini');
+const { detectarIntent } = require('../ai/gemini');
 const { obtenerEstado } = require('./estadoConversacion');
 const logger = require('../utils/logger');
 
@@ -21,22 +21,18 @@ async function enrutarMensaje({ texto, numero, sock }) {
   }
 
   try {
-    const intent = await detectarIntent(texto);
+    const { intent, respuesta } = await procesarMensajeInicial(texto);
     logger.mensaje(`Intent detectado para ${logger.enmascararNumero(numero)}: ${intent || 'ninguno'}`);
 
     if (!intent || !handlers[intent]) {
-      const respuesta = await generarRespuestaNatural({
-        tipo: 'saludo_o_no_claro',
-        mensajeUsuario: texto,
-      });
-      await sock.sendMessage(numero, { text: respuesta });
+      await sock.sendMessage(numero, { text: respuesta || '¡Hola! ¿En qué te puedo ayudar? Puedo agendar tu cita, darte precios u horarios.' });
       return;
     }
 
     await handlers[intent]({ texto, numero, sock });
   } catch (err) {
     logger.error('Error no capturado en router', err.stack);
-    await sock.sendMessage(numero, { text: 'Ocurrió un error inesperado. Intenta de nuevo.' });
+    await sock.sendMessage(numero, { text: 'Dame un segundo y vuelvo a intentar 🙏' });
   }
 }
 

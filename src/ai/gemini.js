@@ -1,39 +1,69 @@
-// Detección de intent usando Gemini (function calling)
+// Lógica de IA con Gemini: intent + respuesta combinados, extracción de datos, y retry ante rate limit
 const { GoogleGenerativeAI } = require('@google/generative-ai');
 require('dotenv').config();
+const logger = require('../utils/logger');
 
 const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
 
-const tools = [
-  {
-    functionDeclarations: [
-      {
-        name: 'agendar',
-        description: 'El cliente quiere agendar, reservar o pedir una cita/turno',
-      },
-      {
-        name: 'cancelar',
-        description: 'El cliente quiere cancelar o anular una cita existente',
-      },
-      {
-        name: 'horarios',
-        description: 'El cliente pregunta por horarios o disponibilidad de atención',
-      },
-      {
-        name: 'precios',
-        description: 'El cliente pregunta por precios o costos de servicios',
-      },
-    ],
-  },
-];
+// Wrapper genérico con retry ante error 429 (rate limit), usando el retryDelay que indica la API
+async function llamarConRetry(fn) {
+  try {
+    return await fn();
+  } catch (err) {
+    const es429 = err.status === 429 || err.message?.includes('429');
+    if (!es429) throw err;
 
-async function detectarIntent(texto) {
-  const model = genAI.getGenerativeModel({ model: 'gemini-3-flash-preview', tools });
+    const delayInfo = err.errorDetails?.find(d => d['@type']?.includes('RetryInfo'));
+    const segundos = delayInfo?.retryDelay ? parseInt(delayInfo.retryDelay) : 5;
+    logger.error(`Rate limit de Gemini (429), reintentando en ${segundos}s`);
 
-  const result = await model.generateContent(texto);
+    await new Promise(r => setTimeout(r, segundos * 1000));
+    return await fn(); // un solo reintento
+  }
+}
+
+// Combina detección de intent + redacción de respuesta natural en UNA sola llamada (ahorra cuota)
+async function procesarMensajeInicial(texto) {
+  const toolsCombinado = [
+    {
+      functionDeclarations: [
+        {
+          name: 'responder_cliente',
+          description: 'Determina el intent del cliente y redacta la respuesta a enviarle',
+          parameters: {
+            type: 'object',
+            properties: {
+              intent: {
+                type: 'string',
+                enum: ['agendar', 'cancelar', 'horarios', 'precios', 'ninguno'],
+                description: 'La intención principal del cliente, o "ninguno" si es un saludo o no está claro',
+              },
+              respuesta: {
+                type: 'string',
+                description: 'La respuesta a enviar al cliente. Si el intent es agendar/cancelar/horarios/precios, deja este campo vacío (el handler correspondiente generará su propia respuesta). Si el intent es "ninguno", redacta aquí la respuesta natural (saludo, aclaración, etc).',
+              },
+            },
+            required: ['intent'],
+          },
+        },
+      ],
+    },
+  ];
+
+  const model = genAI.getGenerativeModel({ model: 'gemini-3-flash-preview', tools: toolsCombinado });
+  const nombreBarberia = process.env.NOMBRE_BARBERIA || 'la barbería';
+
+  const prompt = `Eres el asistente de WhatsApp de "${nombreBarberia}". Personalidad amigable, profesional, cercana pero NUNCA íntima (nunca adoptes apodos cariñosos o tono coqueto del cliente, sin excepción). Respuestas cortas y concretas, máximo 1 emoji.
+
+Mensaje del cliente: "${texto}"
+
+Determina la intención y, si es "ninguno" (saludo, duda general, o no está claro), redacta también la respuesta a enviarle: cálida, breve, y que ofrezca agendar/precios/horarios de forma fluida (nunca como lista/menú). Si la intención SÍ es agendar/cancelar/horarios/precios, deja "respuesta" vacío.`;
+
+  const result = await llamarConRetry(() => model.generateContent(prompt));
   const call = result.response.functionCalls()?.[0];
 
-  return call ? call.name : null;
+  if (!call) return { intent: null, respuesta: null };
+  return { intent: call.args.intent === 'ninguno' ? null : call.args.intent, respuesta: call.args.respuesta || null };
 }
 
 // Redacta respuestas con tono de "vendedor amigable" que siempre empuja hacia agendar
@@ -44,20 +74,19 @@ async function generarRespuestaNatural(contexto) {
   const promptSistema = `Eres el asistente de WhatsApp de "${nombreBarberia}". Tu personalidad es amigable, profesional y cercana, pero NUNCA íntima.
 
 Reglas de tono (ESTRICTAS, sin excepción):
-- NUNCA adoptes apodos cariñosos, coqueteos, ni lenguaje íntimo o informal que el cliente use. Mantén siempre distancia profesional y cercanía cordial, sin importar cómo escriba el cliente.
+- NUNCA adoptes apodos cariñosos, coqueteos, ni lenguaje íntimo o informal que el cliente use (ej. "mi amor", "bb", "papi", "corazón"). Mantén siempre distancia profesional y cercanía cordial, sin importar cómo escriba el cliente.
 - Responde de forma concreta y corta, lo justo para que se entienda y se perciba buen servicio.
 - Español natural, frases cortas, máximo 1 emoji por mensaje.
-- NUNCA presentes los servicios u opciones como lista numerada rígida (1. 2. 3.) salvo que el cliente pida explícitamente ver "todo" o el catálogo completo. En vez de eso, menciónalos de forma fluida dentro de la frase, ej: "tenemos corte clásico a $5000, corte con barba a $8000, o solo barba a $3000, ¿cuál te late?"
-- Si faltan datos para agendar (contexto tipo "pedir_datos_faltantes"), pregunta SOLO por lo que falta, de forma natural y en una sola frase fluida, sin repetir lo que el cliente ya dijo. Si falta el servicio, menciona las opciones conversacionalmente. Si falta el barbero, pregunta con quién prefiere o si no tiene preferencia. Nunca suenes a formulario completando campos.
-- Si el cliente da varios datos en un mismo mensaje, no le vuelvas a preguntar por esos datos.
-- Si no entiendes bien algo, no digas "no reconocí eso" — pregunta de forma natural intentando confirmar tu mejor interpretación, ej: "¿te refieres a corte con barba?"
+- NUNCA presentes los servicios u opciones como lista numerada rígida (1. 2. 3.) salvo que el cliente pida explícitamente ver "todo" o el catálogo completo. Menciónalos de forma fluida dentro de la frase.
+- Si faltan datos para agendar (contexto tipo "pedir_datos_faltantes"), pregunta SOLO por lo que falta, de forma natural, sin repetir lo que el cliente ya dijo.
+- Si no entiendes bien algo, no digas "no reconocí eso" — pregunta de forma natural intentando confirmar tu mejor interpretación.
 - Cada respuesta debe sentirse como parte de UNA sola conversación fluida, nunca como un paso de formulario aislado.
 
 Contexto de la situación actual: ${JSON.stringify(contexto)}
 
 Responde SOLO con el mensaje final para el cliente, sin explicaciones ni comillas.`;
 
-  const result = await model.generateContent(promptSistema);
+  const result = await llamarConRetry(() => model.generateContent(promptSistema));
   return result.response.text().trim();
 }
 
@@ -94,10 +123,10 @@ Mensaje nuevo del cliente: "${texto}"
 
 Extrae los datos que el cliente menciona en este mensaje (puede mencionar uno, varios, o ninguno). Si menciona un servicio o barbero con errores de tipeo, corrígelo al nombre exacto del catálogo. Llama a la función con lo que puedas inferir.`;
 
-  const result = await model.generateContent(prompt);
+  const result = await llamarConRetry(() => model.generateContent(prompt));
   const call = result.response.functionCalls()?.[0];
 
   return call ? call.args : {};
 }
 
-module.exports = { detectarIntent, generarRespuestaNatural, extraerDatosCita };
+module.exports = { procesarMensajeInicial, generarRespuestaNatural, extraerDatosCita, llamarConRetry };

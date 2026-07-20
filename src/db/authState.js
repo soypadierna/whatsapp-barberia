@@ -9,7 +9,7 @@ async function guardarDato(id, valor) {
   const data = JSON.parse(JSON.stringify(valor, BufferJSON.replacer));
   const { error } = await supabase.from('auth_sessions').upsert({ id, data, updated_at: new Date().toISOString() });
   if (error) logger.error(`Fallo al guardar sesión (${id})`, error.message);
-  else logger.sesion(`Guardado OK: ${id}`);
+  else if (id === 'creds') logger.sesion(`Guardado OK: ${id}`); // solo log individual para creds
 }
 
 // Lee un valor de la tabla auth_sessions
@@ -43,14 +43,19 @@ async function useSupabaseAuthState() {
     },
     set: async (data) => {
       const tareas = [];
+      let contador = 0;
+
       for (const categoria in data) {
         for (const id in data[categoria]) {
           const valor = data[categoria][id];
           const key = `${categoria}-${id}`;
           tareas.push(valor ? guardarDato(key, valor) : eliminarDato(key));
+          contador++;
         }
       }
+
       await Promise.all(tareas);
+      if (contador > 0) logger.sesion(`${contador} claves de sesión guardadas/actualizadas`);
     },
   };
 
