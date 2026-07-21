@@ -67,15 +67,31 @@ async function eliminarEvento({ citaId, barberoId }) {
   }
 }
 
-// Notifica al primer número admin configurado que un barbero necesita autorizar su Calendar
+// Notifica al primer número admin configurado que un barbero necesita autorizar su Calendar,
+// pero como máximo 1 vez cada 6 horas por barbero (persistido en Supabase)
 async function notificarAdminFaltaOAuth({ barberoNombre, barberoId, sock }) {
   const admins = (process.env.ADMIN_NUMBERS || '').split(',').map(n => n.trim()).filter(Boolean);
   if (!admins.length || !sock) return;
+
+  const id = `oauth_faltante_${barberoId}`;
+  const SEIS_HORAS_MS = 6 * 60 * 60 * 1000;
+
+  const { data: registro } = await supabase
+    .from('notificaciones_admin').select('ultimo_aviso').eq('id', id).maybeSingle();
+
+  if (registro) {
+    const transcurrido = Date.now() - new Date(registro.ultimo_aviso).getTime();
+    if (transcurrido < SEIS_HORAS_MS) {
+      logger.calendar(`Aviso de OAuth faltante para barbero ${barberoId} omitido (ya notificado hace menos de 6h)`);
+      return;
+    }
+  }
 
   const mensaje = `⚠️ El barbero "${barberoNombre}" (id ${barberoId}) tiene una cita agendada pero NO ha autorizado Google Calendar. Sus citas se están guardando pero no sincronizando. Pídele que visite /oauth/authorize?barbero_id=${barberoId} para conectarlo.`;
 
   try {
     await sock.sendMessage(admins[0], { text: mensaje });
+    await supabase.from('notificaciones_admin').upsert({ id, ultimo_aviso: new Date().toISOString() });
   } catch (err) {
     logger.error('Fallo notificando a admin sobre falta de OAuth', err.message);
   }
