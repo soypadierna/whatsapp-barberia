@@ -177,8 +177,14 @@ async function procesarConfirmacion({ datos, servicios, barberos, unSoloBarbero,
   }
 
   await crearEvento({
-    citaId: data.id, barberoId: barbero.id, fecha: datos.fecha, hora: datos.hora,
-    servicioNombre: servicio.nombre, duracionMin: servicio.duracion_min,
+    citaId: data.id,
+    barberoId: barbero.id,
+    barberoNombre: barbero.nombre,
+    fecha: datos.fecha,
+    hora: datos.hora,
+    servicioNombre: servicio.nombre,
+    duracionMin: servicio.duracion_min,
+    sock,
   });
 
   limpiarEstado(numero);

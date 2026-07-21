@@ -125,14 +125,16 @@ async function extraerDatosCita(texto, contextoActual, catalogos) {
   const model = genAI.getGenerativeModel({ model: 'gemini-3-flash-preview', tools: toolsExtraccion });
   const hoy = new Date().toISOString().split('T')[0];
 
-  const prompt = `Fecha de hoy: ${hoy}.
+const prompt = `Fecha de hoy: ${hoy}.
 Catálogo de servicios: ${catalogos.servicios.map(s => s.nombre).join(', ')}.
 Barberos: ${catalogos.barberos.map(b => b.nombre).join(', ')}.
 Datos YA confirmados en turnos anteriores (NO los repitas ni los reescribas): ${JSON.stringify(contextoActual)}.
 Mensaje NUEVO del cliente (analiza SOLO este mensaje): "${texto}"
 
-REGLA CRÍTICA: solo llena un campo si el cliente lo menciona explícitamente EN ESTE mensaje puntual. Si el cliente solo dice una hora (ej. "a las 10am"), NO asumas ni inventes una fecha — deja fecha vacío/ausente aunque haya una fecha ya conocida de antes. Nunca "completes" un campo con un valor implícito o supuesto.`;
+REGLA CRÍTICA: solo llena un campo si el cliente lo menciona explícitamente EN ESTE mensaje puntual. Si el cliente solo dice una hora, NO asumas ni inventes una fecha — deja fecha vacío/ausente aunque haya una fecha ya conocida de antes.
 
+IMPORTANTE sobre formatos difíciles: los clientes suelen escribir fecha y hora juntas, pegadas, o con errores de tipeo/abreviaciones (ej. "20 juli2pm" significa 20 de julio a las 2pm; "manana7pm" significa mañana a las 7pm; "el 5 alas 3" significa el día 5 a las 3). Interpreta el mensaje completo buscando AMBOS datos (fecha Y hora) aunque estén pegados sin espacios, con errores ortográficos en meses/días, o abreviados. Extrae los dos si ambos están presentes en el mensaje, no solo uno.`;
+  
   const result = await llamarConRetry(() => model.generateContent(prompt));
   const call = result.response.functionCalls()?.[0];
 

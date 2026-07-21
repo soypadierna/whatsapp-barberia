@@ -94,7 +94,7 @@ Responde SOLO con el mensaje final para el cliente, sin explicaciones ni comilla
 async function extraerDatosCita(texto, contextoActual, catalogos) {
   const hoy = new Date().toISOString().split('T')[0];
 
-  const prompt = `Fecha de hoy: ${hoy}.
+const prompt = `Fecha de hoy: ${hoy}.
 Catálogo de servicios: ${catalogos.servicios.map(s => s.nombre).join(', ')}.
 Barberos: ${catalogos.barberos.map(b => b.nombre).join(', ')}.
 Datos YA confirmados en turnos anteriores (NO los repitas ni los reescribas): ${JSON.stringify(contextoActual)}.
@@ -102,8 +102,10 @@ Mensaje NUEVO del cliente (analiza SOLO este mensaje): "${texto}"
 
 REGLA CRÍTICA: solo llena un campo si el cliente lo menciona explícitamente EN ESTE mensaje puntual. Si el cliente solo dice una hora, NO asumas ni inventes una fecha — deja "fecha": null aunque haya una fecha ya conocida de antes.
 
-Responde SOLO con JSON: {"servicio": "nombre o null", "barbero": "nombre o null", "fecha": "YYYY-MM-DD o null", "hora": "HH:MM o null"}`;
+IMPORTANTE sobre formatos difíciles: los clientes suelen escribir fecha y hora juntas, pegadas, o con errores de tipeo/abreviaciones (ej. "20 juli2pm" significa 20 de julio a las 2pm; "manana7pm" significa mañana a las 7pm). Interpreta el mensaje completo buscando AMBOS datos aunque estén pegados sin espacios o con errores ortográficos. Extrae los dos si ambos están presentes, no solo uno.
 
+Responde SOLO con JSON: {"servicio": "nombre o null", "barbero": "nombre o null", "fecha": "YYYY-MM-DD o null", "hora": "HH:MM o null"}`;
+  
   const result = await llamarConRetry(() =>
     groq.chat.completions.create({
       model: MODELO,

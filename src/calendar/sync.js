@@ -2,14 +2,15 @@
 const { google } = require('googleapis');
 const { obtenerClienteBarbero } = require('./oauth');
 const { supabase } = require('../db/client');
-
 const logger = require('../utils/logger');
 
 // Crea evento en Calendar y guarda el event_id en la cita
-async function crearEvento({ citaId, barberoId, fecha, hora, servicioNombre, duracionMin }) {
+async function crearEvento({ citaId, barberoId, barberoNombre, fecha, hora, servicioNombre, duracionMin, sock }) {
   const auth = await obtenerClienteBarbero(barberoId);
+
   if (!auth) {
-    logger.calendar(`Barbero ${barberoId} sin OAuth configurado, se omite sync`);
+    logger.error(`Barbero "${barberoNombre}" (id ${barberoId}) sin OAuth de Calendar configurado. Cita ${citaId} guardada solo en Supabase, NO sincronizada.`);
+    await notificarAdminFaltaOAuth({ barberoNombre, barberoId, sock });
     return null;
   }
 
@@ -31,7 +32,7 @@ async function crearEvento({ citaId, barberoId, fecha, hora, servicioNombre, dur
     logger.calendar(`Evento creado OK para barbero ${barberoId}, cita ${citaId}`);
     return evento.data.id;
   } catch (err) {
-    logger.error(`Fallo creando evento Calendar para barbero ${barberoId}`, err.message);
+    logger.error(`Fallo creando evento Calendar para barbero ${barberoId}, cita ${citaId}`, err.message);
     return null;
   }
 }
@@ -63,6 +64,20 @@ async function eliminarEvento({ citaId, barberoId }) {
     logger.calendar(`Evento eliminado OK para barbero ${barberoId}, cita ${citaId}`);
   } catch (err) {
     logger.error(`Fallo eliminando evento Calendar para barbero ${barberoId}, cita ${citaId}`, err.message);
+  }
+}
+
+// Notifica al primer número admin configurado que un barbero necesita autorizar su Calendar
+async function notificarAdminFaltaOAuth({ barberoNombre, barberoId, sock }) {
+  const admins = (process.env.ADMIN_NUMBERS || '').split(',').map(n => n.trim()).filter(Boolean);
+  if (!admins.length || !sock) return;
+
+  const mensaje = `⚠️ El barbero "${barberoNombre}" (id ${barberoId}) tiene una cita agendada pero NO ha autorizado Google Calendar. Sus citas se están guardando pero no sincronizando. Pídele que visite /oauth/authorize?barbero_id=${barberoId} para conectarlo.`;
+
+  try {
+    await sock.sendMessage(admins[0], { text: mensaje });
+  } catch (err) {
+    logger.error('Fallo notificando a admin sobre falta de OAuth', err.message);
   }
 }
 
