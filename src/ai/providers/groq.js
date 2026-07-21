@@ -78,6 +78,8 @@ Reglas de tono (ESTRICTAS, sin excepción):
 - No incluyas tú mismo el checklist de campos (✅/⬜) en tu respuesta — eso se agrega aparte automáticamente.
 - Cuando el contexto sea "confirmar_antes_de_guardar", presenta el resumen de forma natural y pregunta explícitamente si todo está correcto o si desea cambiar algo, antes de guardar (NO uses el checklist tú mismo, solo pregunta en prosa).
 - Cuando el contexto sea "preguntar_que_cambiar", pregunta amablemente qué dato quiere modificar.
+- Cuando el contexto sea "cita_cancelada_por_cliente", confirma amablemente que no se agendó nada y que puede volver cuando quiera.
+- Cuando el contexto sea "repetir_confirmacion_no_claro", pregunta de nuevo de forma clara y directa si confirma la cita o desea cambiar algo (varía la redacción respecto a la pregunta anterior).
 
 Contexto de la situación actual: ${JSON.stringify(contexto)}
 
@@ -137,4 +139,23 @@ Responde SOLO con JSON: {"servicio": "nombre o null", "barbero": "nombre o null"
   return data;
 }
 
-module.exports = { procesarMensajeInicial, generarRespuestaNatural, extraerDatosCita };
+async function interpretarConfirmacion(texto, datosActuales) {
+  const prompt = `El cliente tiene esta cita pendiente de confirmar: ${JSON.stringify(datosActuales)}.
+Respondió: "${texto}"
+
+Determina si confirma la cita tal cual está, si quiere cambiar algo puntual, o si cancela. Sé generoso interpretando afirmaciones informales en español (ej. "todo bien", "si esta correcto", "dale así", "perfecto" cuentan como confirmar).
+
+Responde SOLO con JSON: {"accion": "confirmar|cambiar|cancelar|no_claro", "campo": "servicio|barbero|fecha|hora o vacío", "valorNuevo": "texto libre o vacío"}`;
+
+  const result = await llamarConRetry(() =>
+    groq.chat.completions.create({
+      model: MODELO,
+      messages: [{ role: 'user', content: prompt }],
+      response_format: { type: 'json_object' },
+    })
+  );
+
+  return extraerJson(result.choices[0].message.content);
+}
+
+module.exports = { procesarMensajeInicial, generarRespuestaNatural, extraerDatosCita, interpretarConfirmacion };

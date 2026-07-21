@@ -5,7 +5,7 @@ const {
   obtenerHorariosLibres, estaDisponible,
   otrasHorasMismoDia, otroDiaMismaHora, otroBarberoMismaFechaHora,
 } = require('../calendar/disponibilidad');
-const { generarRespuestaNatural, extraerDatosCita } = require('../ai/provider');
+const { generarRespuestaNatural, extraerDatosCita, interpretarConfirmacion } = require('../ai/provider');
 const { obtenerEstado, setEstado, limpiarEstado } = require('../core/estadoConversacion');
 const { construirChecklist } = require('../utils/checklist');
 const logger = require('../utils/logger');
@@ -31,17 +31,51 @@ module.exports = async function agendar({ texto, numero, sock }) {
 
   // Sub-estado: esperando confirmación final antes de guardar
   if (estadoPrevio.esperandoConfirmacionFinal) {
-    if (AFIRMACIONES.test(texto.trim())) {
+    const resultado = await interpretarConfirmacion(texto, {
+      servicio: estadoPrevio.servicioNombre, barbero: estadoPrevio.barberoNombre,
+      fecha: estadoPrevio.fecha, hora: estadoPrevio.hora,
+    });
+
+    if (resultado.accion === 'confirmar') {
       return guardarCita({ datos: estadoPrevio, servicios, barberos, unSoloBarbero, numero, sock });
     }
-    if (NEGACIONES.test(texto.trim())) {
-      setEstado(numero, { ...estadoPrevio, esperandoConfirmacionFinal: false });
-      const respuesta = await generarRespuestaNatural({ tipo: 'preguntar_que_cambiar' });
+
+    if (resultado.accion === 'cancelar') {
+      limpiarEstado(numero);
+      const respuesta = await generarRespuestaNatural({ tipo: 'cita_cancelada_por_cliente' });
       await sock.sendMessage(numero, { text: respuesta });
       return;
     }
-    // Si no es clara afirmación/negación, intenta extraer si quiso cambiar algo puntual y cae al flujo normal
-    setEstado(numero, { ...estadoPrevio, esperandoConfirmacionFinal: false });
+
+    if (resultado.accion === 'cambiar' && resultado.campo) {
+      const datosActualizados = { ...estadoPrevio, esperandoConfirmacionFinal: false };
+
+      // Reutiliza extraerDatosCita para interpretar el nuevo valor mencionado (mismo parser que ya funciona bien)
+      const extraidoCambio = await extraerDatosCita(resultado.valorNuevo || texto, {}, { servicios, barberos });
+
+      if (resultado.campo === 'servicio' && extraidoCambio.servicio) datosActualizados.servicioNombre = extraidoCambio.servicio;
+      if (resultado.campo === 'barbero' && extraidoCambio.barbero) datosActualizados.barberoNombre = extraidoCambio.barbero;
+      if (resultado.campo === 'fecha' && extraidoCambio.fecha) datosActualizados.fecha = extraidoCambio.fecha;
+      if (resultado.campo === 'hora' && extraidoCambio.hora) datosActualizados.hora = extraidoCambio.hora;
+
+      const servicioNuevo = servicios.find(s => s.nombre.toLowerCase() === datosActualizados.servicioNombre?.toLowerCase());
+      const barberoNuevo = barberos.find(b => b.nombre.toLowerCase() === datosActualizados.barberoNombre?.toLowerCase());
+
+      return procesarConfirmacion({
+        datos: { ...datosActualizados, servicioResuelto: servicioNuevo, barberoResuelto: barberoNuevo },
+        servicios, barberos, unSoloBarbero, numero, sock,
+      });
+    }
+
+    // no_claro: repite la pregunta de confirmación sin resetear el estado (nunca se pierde la cita)
+    setEstado(numero, estadoPrevio); // mantiene el estado intacto explícitamente
+    const checklist = construirChecklist({
+      servicio: estadoPrevio.servicioNombre, barbero: estadoPrevio.barberoNombre,
+      fecha: estadoPrevio.fecha, hora: estadoPrevio.hora, mostrarBarbero: !unSoloBarbero,
+    });
+    const respuesta = await generarRespuestaNatural({ tipo: 'repetir_confirmacion_no_claro' });
+    await sock.sendMessage(numero, { text: `${respuesta}\n\n${checklist}` });
+    return;
   }
 
   // Sub-estado: el bot ofreció las 3 rutas y espera que el cliente elija una explícitamente

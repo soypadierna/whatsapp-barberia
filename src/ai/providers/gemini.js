@@ -94,6 +94,8 @@ Reglas de tono (ESTRICTAS, sin excepción):
 - No incluyas tú mismo el checklist de campos (✅/⬜) en tu respuesta — eso se agrega aparte automáticamente.
 - Cuando el contexto sea "confirmar_antes_de_guardar", presenta el resumen de forma natural y pregunta explícitamente si todo está correcto o si desea cambiar algo, antes de guardar (NO uses el checklist tú mismo, solo pregunta en prosa).
 - Cuando el contexto sea "preguntar_que_cambiar", pregunta amablemente qué dato quiere modificar.
+- Cuando el contexto sea "cita_cancelada_por_cliente", confirma amablemente que no se agendó nada y que puede volver cuando quiera.
+- Cuando el contexto sea "repetir_confirmacion_no_claro", pregunta de nuevo de forma clara y directa si confirma la cita o desea cambiar algo (varía la redacción respecto a la pregunta anterior).
 
 Contexto de la situación actual: ${JSON.stringify(contexto)}
 
@@ -160,4 +162,43 @@ IMPORTANTE sobre formatos difíciles: los clientes suelen escribir fecha y hora 
   return call ? call.args : {};
 }
 
-module.exports = { procesarMensajeInicial, generarRespuestaNatural, extraerDatosCita };
+// Interpreta la respuesta del cliente cuando se le pidió confirmar antes de guardar la cita
+async function interpretarConfirmacion(texto, datosActuales) {
+  const toolsConfirmacion = [
+    {
+      functionDeclarations: [
+        {
+          name: 'interpretar_respuesta',
+          description: 'Determina si el cliente confirma, quiere cambiar algo, o cancela',
+          parameters: {
+            type: 'object',
+            properties: {
+              accion: {
+                type: 'string',
+                enum: ['confirmar', 'cambiar', 'cancelar', 'no_claro'],
+                description: 'confirmar si acepta (ej. "sí", "todo bien", "correcto", "dale", "así está bien"); cambiar si pide modificar un dato puntual; cancelar si quiere abandonar; no_claro si no se entiende',
+              },
+              campo: { type: 'string', description: 'Si accion es "cambiar", qué campo quiere modificar: servicio, barbero, fecha, u hora. Vacío si no aplica.' },
+              valorNuevo: { type: 'string', description: 'Si accion es "cambiar", el nuevo valor que menciona para ese campo (texto libre, se procesará después). Vacío si no aplica.' },
+            },
+            required: ['accion'],
+          },
+        },
+      ],
+    },
+  ];
+
+  const model = genAI.getGenerativeModel({ model: 'gemini-3-flash-preview', tools: toolsConfirmacion });
+
+  const prompt = `El cliente tiene esta cita pendiente de confirmar: ${JSON.stringify(datosActuales)}.
+Respondió: "${texto}"
+
+Determina si confirma la cita tal cual está, si quiere cambiar algo puntual, o si cancela. Sé generoso interpretando afirmaciones informales en español (ej. "todo bien", "si esta correcto", "dale así", "perfecto", "de una" cuentan como confirmar).`;
+
+  const result = await llamarConRetry(() => model.generateContent(prompt));
+  const call = result.response.functionCalls()?.[0];
+
+  return call ? call.args : { accion: 'no_claro' };
+}
+
+module.exports = { procesarMensajeInicial, generarRespuestaNatural, extraerDatosCita, interpretarConfirmacion, llamarConRetry };
