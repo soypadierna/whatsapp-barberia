@@ -92,6 +92,8 @@ Reglas de tono (ESTRICTAS, sin excepción):
 - Cuando el contexto sea "mostrar_catalogo_inicial", presenta los servicios de forma fluida en una frase (no como lista numerada), y pregunta cuál le interesa.
 - Cuando el contexto sea "ofrecer_tres_rutas", explica brevemente que ese horario no está libre y ofrece las opciones disponibles (rutaA=otras horas mismo día, rutaB=mismo horario otro día, rutaC=otro barbero mismo día/hora) SOLO las que no sean null, de forma conversacional, dejando que el cliente elija.
 - No incluyas tú mismo el checklist de campos (✅/⬜) en tu respuesta — eso se agrega aparte automáticamente.
+- Cuando el contexto sea "confirmar_antes_de_guardar", presenta el resumen de forma natural y pregunta explícitamente si todo está correcto o si desea cambiar algo, antes de guardar (NO uses el checklist tú mismo, solo pregunta en prosa).
+- Cuando el contexto sea "preguntar_que_cambiar", pregunta amablemente qué dato quiere modificar.
 
 Contexto de la situación actual: ${JSON.stringify(contexto)}
 
@@ -99,6 +101,15 @@ Responde SOLO con el mensaje final para el cliente, sin explicaciones ni comilla
 
   const result = await llamarConRetry(() => model.generateContent(promptSistema));
   return result.response.text().trim();
+}
+
+// Calcula "hoy" en la zona horaria de Costa Rica (evita desfases por UTC en Railway)
+function obtenerFechaHoyCR() {
+  return new Date().toLocaleDateString('en-CA', { timeZone: 'America/Costa_Rica' }); // formato YYYY-MM-DD
+}
+
+function obtenerDiaSemanaCR() {
+  return new Date().toLocaleDateString('es-CR', { timeZone: 'America/Costa_Rica', weekday: 'long' });
 }
 
 async function extraerDatosCita(texto, contextoActual, catalogos) {
@@ -113,7 +124,7 @@ async function extraerDatosCita(texto, contextoActual, catalogos) {
             properties: {
               servicio: { type: 'string', description: 'Nombre del servicio del catálogo, SOLO si se menciona en este mensaje' },
               barbero: { type: 'string', description: 'Nombre del barbero, SOLO si se menciona en este mensaje' },
-              fecha: { type: 'string', description: 'Fecha YYYY-MM-DD, SOLO si el cliente menciona una fecha o referencia temporal ("hoy", "mañana", día de la semana) explícitamente EN ESTE mensaje' },
+              fecha: { type: 'string', description: 'Fecha YYYY-MM-DD, SOLO si el cliente menciona una fecha o referencia temporal explícitamente EN ESTE mensaje' },
               hora: { type: 'string', description: 'Hora HH:MM, SOLO si se menciona en este mensaje' },
             },
           },
@@ -123,9 +134,10 @@ async function extraerDatosCita(texto, contextoActual, catalogos) {
   ];
 
   const model = genAI.getGenerativeModel({ model: 'gemini-3-flash-preview', tools: toolsExtraccion });
-  const hoy = new Date().toISOString().split('T')[0];
+  const hoy = obtenerFechaHoyCR();
+  const diaSemanaHoy = obtenerDiaSemanaCR();
 
-const prompt = `Fecha de hoy: ${hoy}.
+  const prompt = `Fecha de HOY: ${hoy} (${diaSemanaHoy}), zona horaria Costa Rica.
 Catálogo de servicios: ${catalogos.servicios.map(s => s.nombre).join(', ')}.
 Barberos: ${catalogos.barberos.map(b => b.nombre).join(', ')}.
 Datos YA confirmados en turnos anteriores (NO los repitas ni los reescribas): ${JSON.stringify(contextoActual)}.
@@ -133,8 +145,15 @@ Mensaje NUEVO del cliente (analiza SOLO este mensaje): "${texto}"
 
 REGLA CRÍTICA: solo llena un campo si el cliente lo menciona explícitamente EN ESTE mensaje puntual. Si el cliente solo dice una hora, NO asumas ni inventes una fecha — deja fecha vacío/ausente aunque haya una fecha ya conocida de antes.
 
-IMPORTANTE sobre formatos difíciles: los clientes suelen escribir fecha y hora juntas, pegadas, o con errores de tipeo/abreviaciones (ej. "20 juli2pm" significa 20 de julio a las 2pm; "manana7pm" significa mañana a las 7pm; "el 5 alas 3" significa el día 5 a las 3). Interpreta el mensaje completo buscando AMBOS datos (fecha Y hora) aunque estén pegados sin espacios, con errores ortográficos en meses/días, o abreviados. Extrae los dos si ambos están presentes en el mensaje, no solo uno.`;
-  
+REGLA DE FECHAS RELATIVAS (obligatoria, calcula con precisión):
+- "hoy" = ${hoy}
+- "mañana" = ${hoy} + 1 día exacto
+- "pasado mañana" = ${hoy} + 2 días exactos
+- "el [día de la semana]" (ej. "el viernes") = la próxima ocurrencia de ese día contando desde hoy (${diaSemanaHoy}), sin saltarte ni agregar días extra
+- Calcula SIEMPRE tomando como base literal la fecha de HOY indicada arriba, nunca uses una fecha distinta como referencia.
+
+IMPORTANTE sobre formatos difíciles: los clientes suelen escribir fecha y hora juntas, pegadas, o con errores de tipeo/abreviaciones (ej. "20 juli2pm" significa 20 de julio a las 2pm; "manana7pm" significa mañana a las 7pm). Interpreta el mensaje completo buscando AMBOS datos aunque estén pegados sin espacios o con errores ortográficos.`;
+
   const result = await llamarConRetry(() => model.generateContent(prompt));
   const call = result.response.functionCalls()?.[0];
 

@@ -62,7 +62,7 @@ Responde SOLO con un JSON válido, sin texto adicional, con este formato exacto:
 async function generarRespuestaNatural(contexto) {
   const nombreBarberia = process.env.NOMBRE_BARBERIA || 'la barbería';
 
-  const prompt = `Eres el asistente de WhatsApp de "${nombreBarberia}". Tu personalidad es amigable, profesional y cercana, pero NUNCA íntima.
+  const promptSistema = `Eres el asistente de WhatsApp de "${nombreBarberia}". Tu personalidad es amigable, profesional y cercana, pero NUNCA íntima.
 
 Reglas de tono (ESTRICTAS, sin excepción):
 - NUNCA adoptes apodos cariñosos, coqueteos, ni lenguaje íntimo o informal que el cliente use. Mantén siempre distancia profesional y cercanía cordial.
@@ -76,6 +76,8 @@ Reglas de tono (ESTRICTAS, sin excepción):
 - Cuando el contexto sea "ofrecer_tres_rutas", explica brevemente que ese horario no está libre y ofrece las opciones disponibles (rutaA=otras horas mismo día, rutaB=mismo horario otro día, rutaC=otro barbero mismo día/hora) SOLO las que no sean null, de forma conversacional, dejando que el cliente elija.
 - Si el tipo de situación es "horario_no_disponible" y ya se dio una respuesta similar antes en la conversación, varía la redacción con sinónimos y estructura distinta, nunca repitas la misma frase textual dos veces seguidas.
 - No incluyas tú mismo el checklist de campos (✅/⬜) en tu respuesta — eso se agrega aparte automáticamente.
+- Cuando el contexto sea "confirmar_antes_de_guardar", presenta el resumen de forma natural y pregunta explícitamente si todo está correcto o si desea cambiar algo, antes de guardar (NO uses el checklist tú mismo, solo pregunta en prosa).
+- Cuando el contexto sea "preguntar_que_cambiar", pregunta amablemente qué dato quiere modificar.
 
 Contexto de la situación actual: ${JSON.stringify(contexto)}
 
@@ -84,28 +86,44 @@ Responde SOLO con el mensaje final para el cliente, sin explicaciones ni comilla
   const result = await llamarConRetry(() =>
     groq.chat.completions.create({
       model: MODELO,
-      messages: [{ role: 'user', content: prompt }],
+      messages: [{ role: 'user', content: promptSistema }],
     })
   );
 
   return result.choices[0].message.content.trim();
 }
 
-async function extraerDatosCita(texto, contextoActual, catalogos) {
-  const hoy = new Date().toISOString().split('T')[0];
+function obtenerFechaHoyCR() {
+  return new Date().toLocaleDateString('en-CA', { timeZone: 'America/Costa_Rica' });
+}
 
-const prompt = `Fecha de hoy: ${hoy}.
+function obtenerDiaSemanaCR() {
+  return new Date().toLocaleDateString('es-CR', { timeZone: 'America/Costa_Rica', weekday: 'long' });
+}
+
+async function extraerDatosCita(texto, contextoActual, catalogos) {
+  const hoy = obtenerFechaHoyCR();
+  const diaSemanaHoy = obtenerDiaSemanaCR();
+
+  const prompt = `Fecha de HOY: ${hoy} (${diaSemanaHoy}), zona horaria Costa Rica.
 Catálogo de servicios: ${catalogos.servicios.map(s => s.nombre).join(', ')}.
 Barberos: ${catalogos.barberos.map(b => b.nombre).join(', ')}.
 Datos YA confirmados en turnos anteriores (NO los repitas ni los reescribas): ${JSON.stringify(contextoActual)}.
 Mensaje NUEVO del cliente (analiza SOLO este mensaje): "${texto}"
 
-REGLA CRÍTICA: solo llena un campo si el cliente lo menciona explícitamente EN ESTE mensaje puntual. Si el cliente solo dice una hora, NO asumas ni inventes una fecha — deja "fecha": null aunque haya una fecha ya conocida de antes.
+REGLA CRÍTICA: solo llena un campo si el cliente lo menciona explícitamente EN ESTE mensaje. Si solo dice una hora, deja "fecha": null aunque haya una fecha ya conocida de antes.
 
-IMPORTANTE sobre formatos difíciles: los clientes suelen escribir fecha y hora juntas, pegadas, o con errores de tipeo/abreviaciones (ej. "20 juli2pm" significa 20 de julio a las 2pm; "manana7pm" significa mañana a las 7pm). Interpreta el mensaje completo buscando AMBOS datos aunque estén pegados sin espacios o con errores ortográficos. Extrae los dos si ambos están presentes, no solo uno.
+REGLA DE FECHAS RELATIVAS (obligatoria, calcula con precisión):
+- "hoy" = ${hoy}
+- "mañana" = ${hoy} + 1 día exacto
+- "pasado mañana" = ${hoy} + 2 días exactos
+- "el [día de la semana]" = la próxima ocurrencia de ese día contando desde hoy (${diaSemanaHoy})
+- Calcula SIEMPRE tomando como base literal la fecha de HOY indicada arriba.
+
+IMPORTANTE: fecha y hora pueden venir juntas/pegadas o con errores de tipeo (ej. "20 juli2pm", "manana7pm"). Extrae ambos si están presentes.
 
 Responde SOLO con JSON: {"servicio": "nombre o null", "barbero": "nombre o null", "fecha": "YYYY-MM-DD o null", "hora": "HH:MM o null"}`;
-  
+
   const result = await llamarConRetry(() =>
     groq.chat.completions.create({
       model: MODELO,
