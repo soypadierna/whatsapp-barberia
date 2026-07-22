@@ -80,6 +80,24 @@ Reglas de tono (ESTRICTAS, sin excepción):
 - Cuando el contexto sea "preguntar_que_cambiar", pregunta amablemente qué dato quiere modificar.
 - Cuando el contexto sea "cita_cancelada_por_cliente", confirma amablemente que no se agendó nada y que puede volver cuando quiera.
 - Cuando el contexto sea "repetir_confirmacion_no_claro", pregunta de nuevo de forma clara y directa si confirma la cita o desea cambiar algo (varía la redacción respecto a la pregunta anterior).
+- FORMATO DE MENSAJES: escribe como se escribe realmente por WhatsApp, con mensajes cortos y saltos de línea, NUNCA como párrafo largo de folleto con todo encadenado en comas.
+- Cuando presentes 2 o más opciones/alternativas (horarios, rutas de solución, servicios del catálogo completo), usa este formato:
+  * Una frase corta de contexto/situación primero, en su propia línea
+  * Línea en blanco
+  * Cada opción en su propia línea, con emoji numerado (1️⃣ 2️⃣ 3️⃣) o viñeta (•)
+  * Línea en blanco
+  * Pregunta corta de cierre en su propia línea
+- Ejemplo de formato esperado para "ofrecer_tres_rutas":
+"Juan no tiene espacio a las 10 mañana 😕
+
+Puedo ofrecerte:
+1️⃣ 09:00, 09:30 o 10:30 con Juan
+2️⃣ El mismo horario pero al día siguiente
+3️⃣ Carlos está libre mañana a esa hora
+
+¿Cuál prefieres?"
+- Aplica este mismo formato de líneas separadas para "mostrar_otras_horas" y para "mostrar_catalogo_inicial" cuando haya más de 2 servicios.
+- Para respuestas simples de un solo dato (pedir un campo, confirmaciones, saludos) sigue usando frases cortas normales, sin forzar el formato de lista si no hay múltiples opciones que mostrar.
 
 Contexto de la situación actual: ${JSON.stringify(contexto)}
 
@@ -143,7 +161,7 @@ async function interpretarConfirmacion(texto, datosActuales) {
   const prompt = `El cliente tiene esta cita pendiente de confirmar: ${JSON.stringify(datosActuales)}.
 Respondió: "${texto}"
 
-Determina si confirma la cita tal cual está, si quiere cambiar algo puntual, o si cancela. Sé generoso interpretando afirmaciones informales en español (ej. "todo bien", "si esta correcto", "dale así", "perfecto" cuentan como confirmar).
+Determina si confirma la cita tal cual está, si quiere cambiar algo puntual, o si cancela. Sé generoso interpretando afirmaciones informales en español (ej. "todo bien", "esta correcto", "ok", "dale así", "perfecto", "confirmo" cuentan como confirmar).
 
 Responde SOLO con JSON: {"accion": "confirmar|cambiar|cancelar|no_claro", "campo": "servicio|barbero|fecha|hora o vacío", "valorNuevo": "texto libre o vacío"}`;
 
@@ -155,7 +173,9 @@ Responde SOLO con JSON: {"accion": "confirmar|cambiar|cancelar|no_claro", "campo
     })
   );
 
-  return extraerJson(result.choices[0].message.content);
-}
+  const data = extraerJson(result.choices[0].message.content);
+  logger.mensaje(`[interpretarConfirmacion/groq] texto="${texto}" → resultado=${JSON.stringify(data)}`);
 
+  return data;
+}
 module.exports = { procesarMensajeInicial, generarRespuestaNatural, extraerDatosCita, interpretarConfirmacion };

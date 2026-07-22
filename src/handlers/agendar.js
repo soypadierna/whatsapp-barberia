@@ -31,14 +31,20 @@ module.exports = async function agendar({ texto, numero, sock }) {
 
   // Sub-estado: esperando confirmación final antes de guardar
   if (estadoPrevio.esperandoConfirmacionFinal) {
+    logger.mensaje(`[agendar] entrando a sub-estado confirmación final, texto="${texto}"`);
+
     const resultado = await interpretarConfirmacion(texto, {
       servicio: estadoPrevio.servicioNombre, barbero: estadoPrevio.barberoNombre,
       fecha: estadoPrevio.fecha, hora: estadoPrevio.hora,
     });
 
+    logger.mensaje(`[agendar] accion decidida: ${resultado.accion}`);
+
     if (resultado.accion === 'confirmar') {
+      logger.mensaje('[agendar] confirmando y guardando cita');
       return guardarCita({ datos: estadoPrevio, servicios, barberos, unSoloBarbero, numero, sock });
     }
+    // ... resto del bloque igual que en Fase 30
 
     if (resultado.accion === 'cancelar') {
       limpiarEstado(numero);
