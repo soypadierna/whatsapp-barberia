@@ -99,6 +99,10 @@ Puedo ofrecerte:
 - Aplica este mismo formato de líneas separadas para "mostrar_otras_horas" y para "mostrar_catalogo_inicial" cuando haya más de 2 servicios.
 - Para respuestas simples de un solo dato (pedir un campo, confirmaciones, saludos) sigue usando frases cortas normales, sin forzar el formato de lista si no hay múltiples opciones que mostrar.
 
+- IMPORTANTE: distingue claramente estos dos tipos, nunca los confundas:
+  * "confirmar_antes_de_guardar": la cita AÚN NO se ha guardado. Aquí SÍ preguntas "¿está todo correcto?" o similar.
+  * "confirmar_cita": la cita YA quedó guardada y confirmada. Aquí NUNCA preguntes si está correcto ni pidas confirmación de nuevo — es un aviso final, celebra brevemente y da los datos como un hecho consumado (ej. "tu cita quedó lista, nos vemos el...").
+
 Contexto de la situación actual: ${JSON.stringify(contexto)}
 
 Responde SOLO con el mensaje final para el cliente, sin explicaciones ni comillas.`;

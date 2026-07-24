@@ -1,6 +1,8 @@
 // Autenticación OAuth de Google Calendar (una vez por barbero)
 const { google } = require('googleapis');
 const { supabase } = require('../db/client');
+const logger = require('../utils/logger');
+
 require('dotenv').config();
 
 const oauth2Client = new google.auth.OAuth2(
@@ -25,13 +27,19 @@ function generarUrlAuth(barberoId) {
 async function guardarTokens(barberoId, code) {
   const { tokens } = await oauth2Client.getToken(code);
 
-  await supabase.from('calendar_tokens').upsert({
+  const { error } = await supabase.from('calendar_tokens').upsert({
     barbero_id: barberoId,
     access_token: tokens.access_token,
     refresh_token: tokens.refresh_token,
     expiry_date: tokens.expiry_date,
   });
 
+  if (error) {
+    logger.error(`Fallo guardando tokens de Calendar para barbero ${barberoId}`, error.message);
+    throw new Error(`No se pudo guardar el token: ${error.message}`);
+  }
+
+  logger.calendar(`Tokens de Calendar guardados OK para barbero ${barberoId}`);
   return tokens;
 }
 

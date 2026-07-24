@@ -256,7 +256,10 @@ async function guardarCita({ datos, servicios, barberos, unSoloBarbero, numero, 
   });
 
   const confirmacion = await generarRespuestaNatural({
-    tipo: 'confirmar_cita', servicio: servicio.nombre, barbero: barbero.nombre, fecha: datos.fecha, hora: datos.hora,
+    tipo: 'confirmar_cita',
+    servicio: servicio.nombre, barbero: barbero.nombre, fecha: datos.fecha, hora: datos.hora,
   });
-  await sock.sendMessage(numero, { text: `${confirmacion}\n\n${checklist}` });
+
+  // Línea fija que deja explícito, sin ambigüedad, que la cita YA quedó agendada (evita que la IA repita la pregunta)
+  await sock.sendMessage(numero, { text: `✅ ¡Listo! Tu cita quedó agendada.\n\n${confirmacion}\n\n${checklist}` });
 }
