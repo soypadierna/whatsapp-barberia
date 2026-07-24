@@ -1,5 +1,9 @@
 const { iniciarSesion } = require('./core/session');
 const { enrutarMensaje } = require('./core/router');
-require('./server'); // levanta el endpoint OAuth junto al bot
+const { cargarEstadoInicial } = require('./db/estadoBot');
+require('./server');
 
-iniciarSesion(enrutarMensaje);
+(async () => {
+  await cargarEstadoInicial();
+  iniciarSesion(enrutarMensaje);
+})();

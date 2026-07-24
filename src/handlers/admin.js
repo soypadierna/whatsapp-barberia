@@ -1,5 +1,6 @@
 // Comandos de administración por WhatsApp (solo números en whitelist)
 const { supabase } = require('../db/client');
+const { pausarBot, reanudarBot, estaPausado } = require('../db/estadoBot');
 
 // Verifica si el número está en la whitelist de admins
 function esAdmin(numero) {
@@ -97,7 +98,19 @@ module.exports = async function admin({ texto, numero, sock }) {
   if (t.includes('agregar servicio')) return agregarServicio(texto, numero, sock);
   if (t.includes('bloquear horario')) return bloquearHorario(texto, numero, sock);
 
-  await sock.sendMessage(numero, {
-    text: 'Comandos admin: ver citas hoy / agregar servicio / bloquear horario',
+    if (t.includes('pausar bot')) {
+    await pausarBot();
+    await sock.sendMessage(numero, { text: '⏸️ Bot pausado. No responderá a clientes hasta que escribas "reanudar bot".' });
+    return;
+  }
+
+  if (t.includes('reanudar bot')) {
+    await reanudarBot();
+    await sock.sendMessage(numero, { text: '▶️ Bot reanudado. Ya está respondiendo a clientes normalmente.' });
+    return;
+  }
+
+await sock.sendMessage(numero, {
+    text: 'Comandos admin: ver citas hoy / agregar servicio / bloquear horario / pausar bot / reanudar bot',
   });
 };
