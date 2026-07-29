@@ -97,4 +97,32 @@ async function notificarAdminFaltaOAuth({ barberoNombre, barberoId, sock }) {
   }
 }
 
-module.exports = { crearEvento, eliminarEvento };
+// Mueve un evento existente en Calendar a una nueva fecha/hora (usado al modificar una cita)
+async function moverEvento({ citaId, barberoId, fecha, hora, duracionMin }) {
+  const { data: cita } = await supabase.from('citas').select('calendar_event_id').eq('id', citaId).single();
+  if (!cita?.calendar_event_id) {
+    logger.calendar(`Cita ${citaId} sin evento de Calendar asociado, nada que mover`);
+    return;
+  }
+
+  const auth = await obtenerClienteBarbero(barberoId);
+  if (!auth) return;
+
+  try {
+    const calendar = google.calendar({ version: 'v3', auth });
+    const inicio = new Date(`${fecha}T${hora}:00`);
+    const fin = new Date(inicio.getTime() + duracionMin * 60000);
+
+    await calendar.events.patch({
+      calendarId: 'primary',
+      eventId: cita.calendar_event_id,
+      requestBody: { start: { dateTime: inicio.toISOString() }, end: { dateTime: fin.toISOString() } },
+    });
+
+    logger.calendar(`Evento movido OK para cita ${citaId} a ${fecha} ${hora}`);
+  } catch (err) {
+    logger.error(`Fallo moviendo evento Calendar para cita ${citaId}`, err.message);
+  }
+}
+
+module.exports = { crearEvento, eliminarEvento, moverEvento };

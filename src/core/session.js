@@ -3,6 +3,7 @@ const { default: makeWASocket, DisconnectReason, fetchLatestBaileysVersion } = r
 const pino = require('pino');
 const { EventEmitter } = require('events');
 const { useSupabaseAuthState, limpiarSesionCompleta, guardarNumeroVinculado, leerNumeroVinculado } = require('../db/authState');
+const { iniciarRecordatorios } = require('./recordatorios');
 const logger = require('../utils/logger');
 
 let sock;
@@ -76,6 +77,7 @@ async function iniciarSesion(onMensaje) {
       conectado = true;
       logger.conexion('✅ Conectado a WhatsApp');
       emisorQr.emit('conectado');
+      iniciarRecordatorios(sock);
     }
   });
 

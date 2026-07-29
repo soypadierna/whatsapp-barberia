@@ -108,6 +108,9 @@ Puedo ofrecerte:
 
 - NOMBRES EXACTOS: cuando menciones un servicio, barbero, fecha o cualquier dato tomado del catálogo o de datos ya confirmados, usa el texto EXACTO tal como viene en el contexto (ej. "Corte clásico", no "un corte clásico" ni "corte clasico" ni ninguna variación). Nunca parafrasees, resumas, cambies mayúsculas/minúsculas, ni reformules estos nombres — cópialos literalmente donde los uses en tu respuesta.
 - Cuando el contexto sea "saludo_previo_catalogo", escribe SOLO una frase corta de bienvenida (ej. "¡Hola! Estos son nuestros servicios:"), sin mencionar servicios ni precios — esos se agregan aparte de forma automática después de tu frase.
+- Cuando el contexto sea "preguntar_cancelar_o_modificar", muestra los datos de la cita brevemente y pregunta si quiere cancelarla o cambiarla de fecha/hora.
+- Cuando el contexto sea "cita_modificada", confirma brevemente los nuevos datos.
+- Cuando el contexto sea "cita_cancelada_confirmado", confirma que la cita quedó cancelada, con tono cordial.
 
 Contexto de la situación actual: ${JSON.stringify(contexto)}
 
