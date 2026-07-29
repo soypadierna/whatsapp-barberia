@@ -3,6 +3,7 @@ const express = require('express');
 const { generarUrlAuth, guardarTokens } = require('./calendar/oauth');
 const { obtenerQrActual, estaConectado, emisorQr, solicitarPairingCode } = require('./core/session');
 
+
 const path = require('path');
 const QRCode = require('qrcode');
 const app = express();
@@ -29,6 +30,23 @@ app.get('/qr', (req, res) => {
   res.sendFile(path.join(__dirname, 'views', 'qr.html'));
 });
 
+// Endpoint que el HTML llama para pedir un pairing code (recibe el número desde un formulario simple)
+app.post('/qr/pairing', express.urlencoded({ extended: true }), async (req, res) => {
+  const { numero } = req.body;
+
+  if (!numero || !/^\d{8,15}$/.test(numero)) {
+    return res.status(400).json({ error: 'Número inválido. Usa solo dígitos, con código de país, sin + ni espacios.' });
+  }
+
+  try {
+    const codigo = await solicitarPairingCode(numero);
+    res.json({ codigo });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// Agrega el evento pairing_code al SSE existente en /qr-stream
 app.get('/qr-stream', (req, res) => {
   res.setHeader('Content-Type', 'text/event-stream');
   res.setHeader('Cache-Control', 'no-store');
@@ -39,14 +57,9 @@ app.get('/qr-stream', (req, res) => {
     const ascii = generarAsciiLimpio(qr);
     res.write(`event: qr\ndata: ${JSON.stringify(ascii)}\n\n`);
   };
-
-  const enviarConectado = () => {
-    res.write(`event: conectado\ndata: ok\n\n`);
-  };
-
-  const enviarAlerta = (info) => {
-    res.write(`event: alerta\ndata: ${JSON.stringify(info)}\n\n`);
-  };
+  const enviarConectado = () => res.write(`event: conectado\ndata: ok\n\n`);
+  const enviarAlerta = (info) => res.write(`event: alerta\ndata: ${JSON.stringify(info)}\n\n`);
+  const enviarPairingCode = (codigo) => res.write(`event: pairing_code\ndata: ${JSON.stringify(codigo)}\n\n`);
 
   if (estaConectado()) {
     enviarConectado();
@@ -57,11 +70,13 @@ app.get('/qr-stream', (req, res) => {
   emisorQr.on('qr', enviarQr);
   emisorQr.on('conectado', enviarConectado);
   emisorQr.on('alerta_numero_distinto', enviarAlerta);
+  emisorQr.on('pairing_code', enviarPairingCode);
 
   req.on('close', () => {
     emisorQr.off('qr', enviarQr);
     emisorQr.off('conectado', enviarConectado);
     emisorQr.off('alerta_numero_distinto', enviarAlerta);
+    emisorQr.off('pairing_code', enviarPairingCode);
   });
 });
 

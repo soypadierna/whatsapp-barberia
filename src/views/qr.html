@@ -12,7 +12,7 @@
   }
   .card {
     background: white; border-radius: 12px; padding: 30px;
-    box-shadow: 0 2px 10px rgba(0,0,0,0.1); text-align: center;
+    box-shadow: 0 2px 10px rgba(0,0,0,0.1); text-align: center; width: 320px;
   }
   h2 { color: #075E54; margin-bottom: 4px; }
   p { color: #667781; font-size: 14px; margin-top: 12px; }
@@ -34,6 +34,19 @@
     background: #ffebee; color: #c62828; border: 1px solid #ef5350;
     border-radius: 8px; padding: 10px; margin-bottom: 12px; font-size: 13px; text-align: left;
   }
+  .separador { margin: 20px 0; border-top: 1px solid #e0e0e0; padding-top: 16px; }
+  input {
+    width: 100%; box-sizing: border-box; padding: 8px; border-radius: 6px;
+    border: 1px solid #ccc; font-size: 14px; margin-bottom: 8px;
+  }
+  button {
+    background: #075E54; color: white; border: none; padding: 8px 16px;
+    border-radius: 6px; cursor: pointer; font-size: 14px;
+  }
+  button:hover { background: #128C7E; }
+  .codigo-grande {
+    font-size: 28px; font-weight: bold; letter-spacing: 4px; color: #075E54; margin: 10px 0;
+  }
 </style>
 </head>
 <body>
@@ -41,11 +54,19 @@
     <h2>WhatsApp Barbería</h2>
     <div id="alerta"></div>
     <div id="contenido"><p>Esperando código QR...</p></div>
+
+    <div class="separador">
+      <p><strong>¿Prefieres vincular con tu número?</strong></p>
+      <input type="text" id="numeroInput" placeholder="Ej: 573001112233 (con código país, sin +)" />
+      <button onclick="pedirCodigo()">Obtener código</button>
+      <div id="pairingResultado"></div>
+    </div>
   </div>
 
   <script>
     const contenido = document.getElementById('contenido');
     const alertaDiv = document.getElementById('alerta');
+    const pairingDiv = document.getElementById('pairingResultado');
     const evtSource = new EventSource('/qr-stream');
 
     evtSource.addEventListener('qr', (e) => {
@@ -55,6 +76,7 @@
 
     evtSource.addEventListener('conectado', () => {
       contenido.innerHTML = '<p class="ok">✅ Conectado correctamente</p>';
+      pairingDiv.innerHTML = '';
       evtSource.close();
     });
 
@@ -62,6 +84,32 @@
       const info = JSON.parse(e.data);
       alertaDiv.innerHTML = '<div class="banner-alerta">⚠️ Se detectó un número distinto al vinculado anteriormente<br>Anterior: ' + info.anterior + '<br>Nuevo: ' + info.nuevo + '</div>';
     });
+
+    evtSource.addEventListener('pairing_code', (e) => {
+      const codigo = JSON.parse(e.data);
+      pairingDiv.innerHTML = '<p>Tu código:</p><div class="codigo-grande">' + codigo + '</div><p>Ingresa este código en WhatsApp > Dispositivos vinculados > Vincular con número de teléfono</p>';
+    });
+
+    async function pedirCodigo() {
+      const numero = document.getElementById('numeroInput').value.trim();
+      pairingDiv.innerHTML = '<p>Generando código...</p>';
+
+      try {
+        const res = await fetch('/qr/pairing', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+          body: 'numero=' + encodeURIComponent(numero),
+        });
+        const data = await res.json();
+
+        if (data.error) {
+          pairingDiv.innerHTML = '<p style="color:#c62828;">' + data.error + '</p>';
+        }
+        // El código exitoso llega vía SSE (evento pairing_code), no hace falta mostrarlo aquí también
+      } catch (err) {
+        pairingDiv.innerHTML = '<p style="color:#c62828;">Error de conexión, intenta de nuevo.</p>';
+      }
+    }
   </script>
 </body>
 </html>

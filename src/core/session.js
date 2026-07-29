@@ -106,4 +106,14 @@ async function iniciarSesion(onMensaje) {
 function obtenerQrActual() { return qrActual; }
 function estaConectado() { return conectado; }
 
-module.exports = { iniciarSesion, obtenerQrActual, estaConectado, emisorQr };
+async function solicitarPairingCode(numero) {
+  if (!sock) throw new Error('Socket no inicializado');
+  if (conectado) throw new Error('Ya hay una sesión conectada');
+
+  const codigo = await sock.requestPairingCode(numero);
+  logger.conexion(`Pairing code solicitado para ${numero}: ${codigo}`);
+  emisorQr.emit('pairing_code', codigo);
+  return codigo;
+}
+
+module.exports = { iniciarSesion, obtenerQrActual, estaConectado, emisorQr, solicitarPairingCode };
