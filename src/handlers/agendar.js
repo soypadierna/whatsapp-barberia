@@ -273,5 +273,5 @@ async function guardarCita({ datos, servicios, barberos, unSoloBarbero, numero, 
   // El nombre exacto del servicio/barbero siempre viene del checklist (dato crudo de Supabase, no pasa por la IA)
   await sock.sendMessage(numero, { text: `✅ ¡Listo! Tu cita quedó agendada.\n\n${confirmacion}\n\n${checklist}` });
 
-  registrarInteraccion(numero, 'cita_confirmada');
+  await registrarInteraccion(numero, 'cita_confirmada');
 }

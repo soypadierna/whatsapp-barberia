@@ -29,13 +29,13 @@ async function enrutarMensaje({ texto, numero, sock }) {
   }
 
   try {
-    const contextoReciente = obtenerContextoReciente(numero);
+    const contextoReciente = await obtenerContextoReciente(numero);
     const { intent, respuesta } = await procesarMensajeInicial(texto, contextoReciente);
     logger.mensaje(`Intent detectado para ${logger.enmascararNumero(numero)}: ${intent || 'ninguno'}`);
 
     if (!intent || !handlers[intent]) {
       await sock.sendMessage(numero, { text: respuesta || '¡Hola! ¿En qué te puedo ayudar? Puedo agendar tu cita, darte precios u horarios.' });
-      registrarInteraccion(numero, 'mensaje_general');
+      await registrarInteraccion(numero, 'mensaje_general');
       return;
     }
 
