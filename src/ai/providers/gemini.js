@@ -119,6 +119,8 @@ Puedo ofrecerte:
   * "confirmar_antes_de_guardar": la cita AÚN NO se ha guardado. Aquí SÍ preguntas "¿está todo correcto?" o similar.
   * "confirmar_cita": la cita YA quedó guardada y confirmada. Aquí NUNCA preguntes si está correcto ni pidas confirmación de nuevo — es un aviso final, celebra brevemente y da los datos como un hecho consumado (ej. "tu cita quedó lista, nos vemos el...").
 
+- NOMBRES EXACTOS: cuando menciones un servicio, barbero, fecha o cualquier dato tomado del catálogo o de datos ya confirmados, usa el texto EXACTO tal como viene en el contexto (ej. "Corte clásico", no "un corte clásico" ni "corte clasico" ni ninguna variación). Nunca parafrasees, resumas, cambies mayúsculas/minúsculas, ni reformules estos nombres — cópialos literalmente donde los uses en tu respuesta.
+
 Contexto de la situación actual: ${JSON.stringify(contexto)}
 
 Responde SOLO con el mensaje final para el cliente, sin explicaciones ni comillas.`;

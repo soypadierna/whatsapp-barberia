@@ -260,6 +260,6 @@ async function guardarCita({ datos, servicios, barberos, unSoloBarbero, numero, 
     servicio: servicio.nombre, barbero: barbero.nombre, fecha: datos.fecha, hora: datos.hora,
   });
 
-  // Línea fija que deja explícito, sin ambigüedad, que la cita YA quedó agendada (evita que la IA repita la pregunta)
+  // El nombre exacto del servicio/barbero siempre viene del checklist (dato crudo de Supabase, no pasa por la IA)
   await sock.sendMessage(numero, { text: `✅ ¡Listo! Tu cita quedó agendada.\n\n${confirmacion}\n\n${checklist}` });
 }
