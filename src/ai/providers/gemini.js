@@ -60,11 +60,15 @@ async function procesarMensajeInicial(texto) {
   const model = genAI.getGenerativeModel({ model: 'gemini-3-flash-preview', tools: toolsCombinado });
   const nombreBarberia = process.env.NOMBRE_BARBERIA || 'la barbería';
 
-  const prompt = `Eres el asistente de WhatsApp de "${nombreBarberia}". Personalidad amigable, profesional, cercana pero NUNCA íntima (nunca adoptes apodos cariñosos o tono coqueto del cliente, sin excepción). Respuestas cortas y concretas, máximo 1 emoji.
+  const contextoLinea = contextoReciente
+    ? `\nContexto reciente de esta conversación (últimas 3 horas): ${contextoReciente}. Si el mensaje del cliente parece continuar esa conversación (ej. dar las gracias, confirmar algo, hacer un comentario breve relacionado), responde acorde a ese contexto en vez de un saludo genérico.`
+    : '';
 
+  const prompt = `Eres el asistente de WhatsApp de "${nombreBarberia}". Personalidad amigable, profesional, cercana pero NUNCA íntima (nunca adoptes apodos cariñosos o tono coqueto del cliente, sin excepción). Respuestas cortas y concretas, máximo 1 emoji.
+${contextoLinea}
 Mensaje del cliente: "${texto}"
 
-Determina la intención y, si es "ninguno", redacta también la respuesta a enviarle: cálida, breve, y que ofrezca agendar/precios/horarios de forma fluida (nunca como lista/menú). Si la intención SÍ es agendar/cancelar/horarios/precios, deja "respuesta" vacío.`;
+Determina la intención y, si es "ninguno" (saludo, agradecimiento, comentario, o no claro), redacta también la respuesta a enviarle. Si hay contexto reciente y el mensaje es un simple agradecimiento o cierre de conversación (ej. "gracias", "listo", "perfecto"), responde de forma breve y cálida reconociendo eso, SIN repetir el menú de opciones ni sonar como un saludo inicial nuevo. Si NO hay contexto reciente o el mensaje es un saludo real nuevo, sí ofrece agendar/precios/horarios de forma fluida. Si la intención SÍ es agendar/cancelar/horarios/precios, deja "respuesta" vacío.`;
 
   const result = await llamarConRetry(() => model.generateContent(prompt));
   const call = result.response.functionCalls()?.[0];

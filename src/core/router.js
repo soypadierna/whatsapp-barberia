@@ -10,6 +10,8 @@ const handlers = {
 const { procesarMensajeInicial } = require('../ai/provider');
 const { obtenerEstado } = require('./estadoConversacion');
 const { estaPausado } = require('../db/estadoBot');
+const { obtenerContextoReciente, registrarInteraccion } = require('../core/historialReciente');
+
 const logger = require('../utils/logger');
 
 async function enrutarMensaje({ texto, numero, sock }) {
@@ -17,7 +19,6 @@ async function enrutarMensaje({ texto, numero, sock }) {
     return handlers.admin({ texto, numero, sock });
   }
 
-  // Si el bot está pausado, ignora mensajes de clientes normales (pero los comandos admin ya se procesaron arriba)
   if (estaPausado()) {
     logger.mensaje(`Bot pausado, mensaje de ${logger.enmascararNumero(numero)} ignorado`);
     return;
@@ -28,11 +29,13 @@ async function enrutarMensaje({ texto, numero, sock }) {
   }
 
   try {
-    const { intent, respuesta } = await procesarMensajeInicial(texto);
+    const contextoReciente = obtenerContextoReciente(numero);
+    const { intent, respuesta } = await procesarMensajeInicial(texto, contextoReciente);
     logger.mensaje(`Intent detectado para ${logger.enmascararNumero(numero)}: ${intent || 'ninguno'}`);
 
     if (!intent || !handlers[intent]) {
       await sock.sendMessage(numero, { text: respuesta || '¡Hola! ¿En qué te puedo ayudar? Puedo agendar tu cita, darte precios u horarios.' });
+      registrarInteraccion(numero, 'mensaje_general');
       return;
     }
 

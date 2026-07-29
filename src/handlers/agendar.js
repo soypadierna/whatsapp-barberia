@@ -8,6 +8,7 @@ const {
 const { generarRespuestaNatural, extraerDatosCita, interpretarConfirmacion } = require('../ai/provider');
 const { obtenerEstado, setEstado, limpiarEstado } = require('../core/estadoConversacion');
 const { construirChecklist, formatearCatalogoServicios } = require('../utils/checklist');
+const { registrarInteraccion } = require('../core/historialReciente');
 const logger = require('../utils/logger');
 
 const RUTA_A = /otr[ao]s?\s*hora|otro\s*horario/i;
@@ -271,4 +272,6 @@ async function guardarCita({ datos, servicios, barberos, unSoloBarbero, numero, 
 
   // El nombre exacto del servicio/barbero siempre viene del checklist (dato crudo de Supabase, no pasa por la IA)
   await sock.sendMessage(numero, { text: `✅ ¡Listo! Tu cita quedó agendada.\n\n${confirmacion}\n\n${checklist}` });
+
+  registrarInteraccion(numero, 'cita_confirmada');
 }

@@ -33,17 +33,20 @@ function extraerJson(texto) {
   return match ? JSON.parse(match[0]) : {};
 }
 
-async function procesarMensajeInicial(texto) {
+async function procesarMensajeInicial(texto, contextoReciente) {
   const nombreBarberia = process.env.NOMBRE_BARBERIA || 'la barbería';
 
-  const prompt = `Eres el asistente de WhatsApp de "${nombreBarberia}". Personalidad amigable, profesional, cercana pero NUNCA íntima (nunca adoptes apodos cariñosos o tono coqueto del cliente, sin excepción). Respuestas cortas y concretas, máximo 1 emoji.
+  const contextoLinea = contextoReciente
+    ? `\nContexto reciente de esta conversación (últimas 3 horas): ${contextoReciente}. Si el mensaje parece continuar esa conversación (ej. agradecimiento, confirmación breve), responde acorde en vez de saludo genérico.`
+    : '';
 
+  const prompt = `Eres el asistente de WhatsApp de "${nombreBarberia}". Personalidad amigable, profesional, cercana pero NUNCA íntima. Respuestas cortas y concretas, máximo 1 emoji.
+${contextoLinea}
 Mensaje del cliente: "${texto}"
 
-Determina la intención del cliente entre: agendar, cancelar, horarios, precios, o ninguno (saludo/no claro). Si es "ninguno", redacta también la respuesta a enviarle: cálida, breve, que ofrezca agendar/precios/horarios de forma fluida (nunca como lista/menú).
+Determina la intención entre: agendar, cancelar, horarios, precios, o ninguno. Si es "ninguno" y hay contexto reciente con un mensaje tipo agradecimiento/cierre, responde breve y cálido reconociendo eso, sin repetir el menú. Si no hay contexto o es saludo nuevo, ofrece agendar/precios/horarios de forma fluida.
 
-Responde SOLO con un JSON válido, sin texto adicional, con este formato exacto:
-{"intent": "agendar|cancelar|horarios|precios|ninguno", "respuesta": "texto o cadena vacía"}`;
+Responde SOLO con un JSON válido: {"intent": "agendar|cancelar|horarios|precios|ninguno", "respuesta": "texto o cadena vacía"}`;
 
   const result = await llamarConRetry(() =>
     groq.chat.completions.create({
