@@ -7,7 +7,7 @@ const {
 } = require('../calendar/disponibilidad');
 const { generarRespuestaNatural, extraerDatosCita, interpretarConfirmacion } = require('../ai/provider');
 const { obtenerEstado, setEstado, limpiarEstado } = require('../core/estadoConversacion');
-const { construirChecklist } = require('../utils/checklist');
+const { construirChecklist, formatearCatalogoServicios } = require('../utils/checklist');
 const logger = require('../utils/logger');
 
 const RUTA_A = /otr[ao]s?\s*hora|otro\s*horario/i;
@@ -119,8 +119,17 @@ module.exports = async function agendar({ texto, numero, sock }) {
     });
 
     const esPrimerMensaje = !estadoPrevio.iniciado;
+
+    // Si es el primer mensaje y falta el servicio, el catálogo se arma con texto fijo (determinístico), no por IA
+    if (esPrimerMensaje && faltantes.includes('servicio')) {
+      const intro = await generarRespuestaNatural({ tipo: 'saludo_previo_catalogo' });
+      const catalogo = formatearCatalogoServicios(servicios);
+      await sock.sendMessage(numero, { text: `${intro}\n\n${catalogo}\n\n¿Cuál te gustaría agendar?` });
+      return;
+    }
+
     const respuestaBase = await generarRespuestaNatural({
-      tipo: esPrimerMensaje && !servicio ? 'mostrar_catalogo_inicial' : 'pedir_datos_faltantes',
+      tipo: 'pedir_datos_faltantes',
       faltantes,
       servicios: servicios.map(s => ({ nombre: s.nombre, precio: s.precio })),
       mostrarListaBarberos: faltantes.includes('barbero'),

@@ -104,6 +104,7 @@ Puedo ofrecerte:
   * "confirmar_cita": la cita YA quedó guardada y confirmada. Aquí NUNCA preguntes si está correcto ni pidas confirmación de nuevo — es un aviso final, celebra brevemente y da los datos como un hecho consumado (ej. "tu cita quedó lista, nos vemos el...").
 
 - NOMBRES EXACTOS: cuando menciones un servicio, barbero, fecha o cualquier dato tomado del catálogo o de datos ya confirmados, usa el texto EXACTO tal como viene en el contexto (ej. "Corte clásico", no "un corte clásico" ni "corte clasico" ni ninguna variación). Nunca parafrasees, resumas, cambies mayúsculas/minúsculas, ni reformules estos nombres — cópialos literalmente donde los uses en tu respuesta.
+- Cuando el contexto sea "saludo_previo_catalogo", escribe SOLO una frase corta de bienvenida (ej. "¡Hola! Estos son nuestros servicios:"), sin mencionar servicios ni precios — esos se agregan aparte de forma automática después de tu frase.
 
 Contexto de la situación actual: ${JSON.stringify(contexto)}
 

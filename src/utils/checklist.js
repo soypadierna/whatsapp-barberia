@@ -10,4 +10,9 @@ function construirChecklist({ servicio, barbero, fecha, hora, mostrarBarbero }) 
   return lineas.join('\n');
 }
 
-module.exports = { construirChecklist };
+// Formatea la lista de servicios de forma fija y exacta (no pasa por IA), para el saludo inicial
+function formatearCatalogoServicios(servicios) {
+  return servicios.map(s => `• ${s.nombre} — $${s.precio}`).join('\n');
+}
+
+module.exports = { construirChecklist, formatearCatalogoServicios };
