@@ -1,0 +1,217 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Panel Admin - Barbería</title>
+<style>
+  * { box-sizing: border-box; }
+  body {
+    background: #f0f2f5; font-family: -apple-system, Segoe UI, Roboto, sans-serif;
+    margin: 0; padding: 12px; color: #111;
+  }
+  h1 { color: #075E54; font-size: 20px; margin: 8px 0 16px; }
+  h2 { color: #075E54; font-size: 16px; margin: 20px 0 10px; }
+  .tabs { display: flex; gap: 6px; margin-bottom: 16px; flex-wrap: wrap; }
+  .tab {
+    background: white; border: 1px solid #ddd; padding: 8px 14px; border-radius: 20px;
+    cursor: pointer; font-size: 13px;
+  }
+  .tab.activo { background: #075E54; color: white; border-color: #075E54; }
+  .card {
+    background: white; border-radius: 10px; padding: 14px; margin-bottom: 10px;
+    box-shadow: 0 1px 3px rgba(0,0,0,0.08);
+  }
+  .metricas { display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 10px; }
+  .metrica-num { font-size: 24px; font-weight: bold; color: #075E54; }
+  .metrica-label { font-size: 12px; color: #667781; }
+  .fila { display: flex; justify-content: space-between; align-items: center; padding: 8px 0; border-bottom: 1px solid #eee; flex-wrap: wrap; gap: 6px; }
+  .fila:last-child { border-bottom: none; }
+  .badge { font-size: 11px; padding: 2px 8px; border-radius: 10px; }
+  .badge.pendiente { background: #fff3cd; color: #856404; }
+  .badge.cancelada { background: #f8d7da; color: #721c24; }
+  input, select { padding: 6px; border-radius: 6px; border: 1px solid #ccc; font-size: 13px; margin: 2px; }
+  button { background: #075E54; color: white; border: none; padding: 6px 12px; border-radius: 6px; cursor: pointer; font-size: 12px; }
+  button.rojo { background: #c62828; }
+  .filtros { display: flex; gap: 6px; margin-bottom: 12px; flex-wrap: wrap; }
+  .oculto { display: none; }
+  .barbero-item, .servicio-item { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
+</style>
+</head>
+<body>
+  <h1>📋 Panel Admin — Barbería Estilo</h1>
+
+  <div class="tabs">
+    <div class="tab activo" data-tab="citas">Citas</div>
+    <div class="tab" data-tab="catalogo">Catálogo</div>
+    <div class="tab" data-tab="metricas">Métricas</div>
+  </div>
+
+  <div id="tab-citas">
+    <div class="filtros">
+      <input type="date" id="filtroDesde" />
+      <input type="date" id="filtroHasta" />
+      <select id="filtroBarbero"><option value="">Todos los barberos</option></select>
+      <button onclick="cargarCitas()">Filtrar</button>
+    </div>
+    <div id="listaCitas"></div>
+  </div>
+
+  <div id="tab-catalogo" class="oculto">
+    <h2>Servicios</h2>
+    <div id="listaServicios"></div>
+    <button onclick="agregarServicio()">+ Agregar servicio</button>
+
+    <h2>Barberos</h2>
+    <div id="listaBarberos"></div>
+  </div>
+
+  <div id="tab-metricas" class="oculto">
+    <div class="filtros">
+      <input type="date" id="metDesde" />
+      <input type="date" id="metHasta" />
+      <button onclick="cargarMetricas()">Actualizar</button>
+    </div>
+    <div class="card metricas" id="metricasResumen"></div>
+    <div class="card" id="metricasPorBarbero"></div>
+  </div>
+
+  <script>
+    const base = window.location.pathname; // incluye /admin/{token}
+
+    document.querySelectorAll('.tab').forEach(tab => {
+      tab.addEventListener('click', () => {
+        document.querySelectorAll('.tab').forEach(t => t.classList.remove('activo'));
+        document.querySelectorAll('[id^="tab-"]').forEach(el => el.classList.add('oculto'));
+        tab.classList.add('activo');
+        document.getElementById('tab-' + tab.dataset.tab).classList.remove('oculto');
+      });
+    });
+
+    async function api(path, opciones) {
+      const res = await fetch(base + '/api' + path, opciones);
+      return res.json();
+    }
+
+    // --- Citas ---
+    async function cargarCitas() {
+      const desde = document.getElementById('filtroDesde').value;
+      const hasta = document.getElementById('filtroHasta').value;
+      const barbero = document.getElementById('filtroBarbero').value;
+
+      const params = new URLSearchParams();
+      if (desde) params.set('desde', desde);
+      if (hasta) params.set('hasta', hasta);
+      if (barbero) params.set('barbero_id', barbero);
+
+      const citas = await api('/citas?' + params.toString());
+      const cont = document.getElementById('listaCitas');
+
+      if (!citas.length) { cont.innerHTML = '<div class="card">Sin citas en este rango.</div>'; return; }
+
+      cont.innerHTML = citas.map(c => `
+        <div class="card fila">
+          <div>
+            <strong>${c.servicios?.nombre || '?'}</strong> con ${c.barberos?.nombre || '?'}<br>
+            <small>${c.fecha} ${c.hora?.slice(0,5)} — ${c.cliente_telefono}</small>
+          </div>
+          <div>
+            <span class="badge ${c.estado}">${c.estado}</span>
+            ${c.estado === 'pendiente' ? `<button class="rojo" onclick="cancelarCita(${c.id})">Cancelar</button>` : ''}
+          </div>
+        </div>
+      `).join('');
+    }
+
+    async function cancelarCita(id) {
+      if (!confirm('¿Cancelar esta cita?')) return;
+      await api('/citas/' + id + '/cancelar', { method: 'POST' });
+      cargarCitas();
+    }
+
+    // --- Catálogo ---
+    async function cargarServicios() {
+      const servicios = await api('/servicios');
+      document.getElementById('listaServicios').innerHTML = servicios.map(s => `
+        <div class="card servicio-item">
+          <input value="${s.nombre}" id="serv-nombre-${s.id}" />
+          <input type="number" value="${s.precio}" id="serv-precio-${s.id}" style="width:90px" />
+          <input type="number" value="${s.duracion_min}" id="serv-dur-${s.id}" style="width:70px" /> min
+          <button onclick="guardarServicio(${s.id})">Guardar</button>
+        </div>
+      `).join('');
+    }
+
+    async function guardarServicio(id) {
+      const nombre = document.getElementById('serv-nombre-' + id).value;
+      const precio = parseFloat(document.getElementById('serv-precio-' + id).value);
+      const duracion_min = parseInt(document.getElementById('serv-dur-' + id).value);
+      await api('/servicios/' + id, { method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify({ nombre, precio, duracion_min }) });
+      alert('Guardado ✅');
+    }
+
+    async function agregarServicio() {
+      const nombre = prompt('Nombre del servicio:');
+      if (!nombre) return;
+      const precio = parseFloat(prompt('Precio:') || '0');
+      const duracion_min = parseInt(prompt('Duración en minutos:') || '30');
+      await api('/servicios', { method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify({ nombre, precio, duracion_min }) });
+      cargarServicios();
+    }
+
+    async function cargarBarberos() {
+      const barberos = await api('/barberos');
+
+      document.getElementById('listaBarberos').innerHTML = barberos.map(b => `
+        <div class="card barbero-item">
+          <input value="${b.nombre}" id="barb-nombre-${b.id}" />
+          <input type="time" value="${b.horario_inicio?.slice(0,5)}" id="barb-inicio-${b.id}" />
+          <input type="time" value="${b.horario_fin?.slice(0,5)}" id="barb-fin-${b.id}" />
+          <label><input type="checkbox" id="barb-activo-${b.id}" ${b.activo ? 'checked' : ''} /> Activo</label>
+          <button onclick="guardarBarbero(${b.id})">Guardar</button>
+        </div>
+      `).join('');
+
+      const selectFiltro = document.getElementById('filtroBarbero');
+      selectFiltro.innerHTML = '<option value="">Todos los barberos</option>' +
+        barberos.map(b => `<option value="${b.id}">${b.nombre}</option>`).join('');
+    }
+
+    async function guardarBarbero(id) {
+      const nombre = document.getElementById('barb-nombre-' + id).value;
+      const horario_inicio = document.getElementById('barb-inicio-' + id).value;
+      const horario_fin = document.getElementById('barb-fin-' + id).value;
+      const activo = document.getElementById('barb-activo-' + id).checked;
+      await api('/barberos/' + id, { method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify({ nombre, horario_inicio, horario_fin, activo }) });
+      alert('Guardado ✅');
+    }
+
+    // --- Métricas ---
+    async function cargarMetricas() {
+      const desde = document.getElementById('metDesde').value;
+      const hasta = document.getElementById('metHasta').value;
+      const params = new URLSearchParams();
+      if (desde) params.set('desde', desde);
+      if (hasta) params.set('hasta', hasta);
+
+      const m = await api('/metricas?' + params.toString());
+
+      document.getElementById('metricasResumen').innerHTML = `
+        <div><div class="metrica-num">${m.totalCitas}</div><div class="metrica-label">Citas totales</div></div>
+        <div><div class="metrica-num">$${m.ingresosEstimados.toLocaleString()}</div><div class="metrica-label">Ingresos estimados</div></div>
+      `;
+
+      const porBarbero = Object.entries(m.porBarbero).map(([nombre, cant]) => `
+        <div class="fila"><span>${nombre}</span><strong>${cant} citas</strong></div>
+      `).join('');
+      document.getElementById('metricasPorBarbero').innerHTML = '<h2 style="margin-top:0">Por barbero</h2>' + porBarbero;
+    }
+
+    // Inicial
+    cargarCitas();
+    cargarServicios();
+    cargarBarberos();
+    cargarMetricas();
+  </script>
+</body>
+</html>

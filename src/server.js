@@ -7,6 +7,9 @@ const { obtenerQrActual, estaConectado, emisorQr, solicitarPairingCode } = requi
 const path = require('path');
 const QRCode = require('qrcode');
 const app = express();
+const adminRoutes = require('./routes/admin');
+
+app.use(adminRoutes);
 
 // Solicita un código de emparejamiento de 8 dígitos para un número específico
 app.get('/pair', async (req, res) => {
